@@ -1,0 +1,4 @@
+(enum ServerReplyID string
+	(entry ERROR err)
+	(entry SET_SESSION sst)
+)

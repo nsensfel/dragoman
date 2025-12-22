@@ -1,0 +1,9 @@
+(require ServerReplyID)
+
+(require ErrorReply)
+(require SetSessionReply)
+
+(polymorph ServerReply msg
+	(case ERROR ErrorReply)
+	(case SET_SESSION SetSessionReply)
+)
