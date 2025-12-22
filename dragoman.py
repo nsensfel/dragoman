@@ -189,35 +189,74 @@ class TypoFixer:
 ################################################################################
 class CodeWriter:
 
-	def __init__ (filename: str):
+	def __init__ (this, filename: str):
 		this.file = open(filename, 'w')
 		this.indent_style = "\t"
 		this.indent_level = 0
+		this.buffer = None
+		this.buffer_ends_line = False
 
 	def decrease_indent (this):
 		if (this.indent_level == 0):
 			Log.print_warning("Unable to lower indent level further.")
 		else:
-			this.ident_level -= 1
+			this.indent_level -= 1
 
 	def increase_indent (this):
-		this.ident_level += 1
+		this.indent_level += 1
 
 	def indent (this):
 		this.file.write(this.indent_style * this.indent_level)
 
+	def discard_buffer (this):
+		this.buffer = None
+		this.buffer_ends_line = False
+
+	def write_buffer (this):
+		this.file.write(this.buffer)
+
+		if (this.buffer_ends_line):
+			this.file.write("\n")
+
+		this.discard_buffer()
+
+	def mark_buffer_as_ending_line (this):
+		this.buffer_ends_line = True
+
+	def set_buffer (this, s: str):
+		this.buffer = s
+
 	def append (this, s: str):
+		if (this.buffer is not None):
+			this.write_buffer()
+
 		this.file.write(s)
 
-	def newline (this, s: str):
+	def newline (this):
+		if (this.buffer is not None):
+			this.write_buffer()
+
 		this.file.write("\n")
 
+	def start_line (this, s: str):
+		if (this.buffer is not None):
+			this.write_buffer()
+
+		this.indent()
+		this.file.write(s)
+
 	def line (this, s: str):
+		if (this.buffer is not None):
+			this.write_buffer()
+
 		this.indent()
 		this.file.write(s)
 		this.newline()
 
 	def finalize (this):
+		if (this.buffer is not None):
+			this.write_buffer()
+
 		this.file.close()
 
 class TokenLocation:
