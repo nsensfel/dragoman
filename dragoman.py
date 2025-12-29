@@ -559,6 +559,7 @@ class PolymorphTypeCase:
 		this.token = token
 		this.name = name
 		this.dtype = dtype
+		this.eentry = None
 
 	def get_token (this) -> TokenLocation:
 		return this.token
@@ -568,6 +569,12 @@ class PolymorphTypeCase:
 
 	def get_type (this) -> DefinedType:
 		return this.dtype
+
+	def get_enum_entry (this) -> EnumTypeEntry:
+		return this.eentry
+
+	def set_enum_entry (this, eentry: EnumTypeEntry):
+		this.eentry = eentry
 
 	def to_string (this):
 		return (
@@ -595,17 +602,24 @@ class PolymorphType (UserDefinedType):
 		token: TokenLocation,
 		name: str,
 		tag: str,
+		enum_type: EnumType,
 		cases: dict()
 	):
 		UserDefinedType.__init__(this, token, name)
 		this.tag = tag
+		this.enum_type = enum_type
 		this.cases = cases
 
 	def get_tag (this) -> str:
 		return this.tag
 
-	def get_cases (this) -> dict():
+	def get_enum_type (this) -> EnumType:
+		return this.enum_type
+	def get_cases_as_dict (this) -> dict[str, PolymorphTypeCase]:
 		return this.cases
+
+	def get_cases (this) -> list[PolymorphTypeCase]:
+		return this.cases.values()
 
 	def register (this):
 		if (UserDefinedType.register(this)):
@@ -803,15 +817,13 @@ class DragomanParser (Parser):
 
 		enum_type = None
 
-		a = dict()
-
-		for (k, v) in t.polymorph_definition.items():
-			entry = v.get_type()
+		for (k, pcase) in t.polymorph_definition.items():
+			entry = pcase.get_type()
 
 			if (not isinstance(entry, ObjectType)):
 				DragomanParser.print_error(
 					"Invalid type used for polymorph case.",
-					v.get_token()
+					pcase.get_token()
 				)
 				raise Exception
 
@@ -826,7 +838,7 @@ class DragomanParser (Parser):
 						+ t.ID1
 						+ "'."
 					),
-					v.get_token()
+					pcase.get_token()
 				)
 				raise Exception
 
@@ -840,24 +852,26 @@ class DragomanParser (Parser):
 						+ "' of target type does not use the same Enum type as "
 						+ " previous entries."
 					),
-					v.get_token()
+					pcase.get_token()
 				)
 				raise Exception
 
 			try:
-				entry = enum_type.get_entry_from_name(v.get_name())
+				entry = enum_type.get_entry_from_name(pcase.get_name())
 			except Exception:
 				DragomanParser.print_error(
 					(
 						"The Enum type '"
 						+ enum_type.get_name()
 						+ "' does not have any entry named '"
-						+ v.get_name()
+						+ pcase.get_name()
 						+ "'."
 					),
-					v.get_token()
+					pcase.get_token()
 				)
 				raise Exception
+
+			pcase.set_enum_entry(entry)
 
 		if (enum_type is None):
 			DragomanParser.print_error(
@@ -869,6 +883,7 @@ class DragomanParser (Parser):
 		result = PolymorphType(
 			TokenLocation(t),
 			t.ID0,
+			t.ID1,
 			enum_type,
 			t.polymorph_definition
 		)
