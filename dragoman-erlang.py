@@ -3,42 +3,97 @@
 import dragoman
 
 class NameConverter:
+	MODULE_NAMES = dict()
+	RECORD_NAMES = dict()
+	VARIABLE_NAMES = dict()
+	RECORD_MEMBER_NAMES = dict()
+	ATOM_NAMES = dict()
+
 	def type_to_module_name (t: dragoman.DefinedType) -> str:
-		return "dgn_" + t.get_name().lower()
+		result = NameConverter.MODULE_NAMES.get(t)
+
+		if result is None:
+			split_name = dragoman.NameSplitter.split(t.get_name())
+
+			result = "dgn_" + ("_".join(split_name))
+			NameConverter.MODULE_NAMES[t] = result
+
+		return result
 
 	def type_to_record_name (t: dragoman.DefinedType) -> str:
-		return t.get_name().lower()
+		result = NameConverter.RECORD_NAMES.get(t)
+
+		if result is None:
+			split_name = dragoman.NameSplitter.split(t.get_name())
+
+			result = "_".join(split_name)
+			NameConverter.RECORD_NAMES[t] = result
+
+		return result
 
 	def object_entry_to_variable (o: dragoman.ObjectTypeEntry) -> str:
-		name = o.get_name().lower()
-		return name[0].upper() + name[1:]
+		result = NameConverter.VARIABLE_NAMES.get(o)
+
+		if result is None:
+			split_name = dragoman.NameSplitter.split(o.get_name())
+
+			result = "".join([(a[0].upper() + a[1:]) for a in split_name])
+			NameConverter.VARIABLE_NAMES[o] = result
+
+		return result
 
 	def object_entry_to_record_member (o: dragoman.ObjectTypeEntry) -> str:
-		return o.get_name().lower()
+		result = NameConverter.RECORD_MEMBER_NAMES.get(o)
+
+		if result is None:
+			split_name = dragoman.NameSplitter.split(o.get_name())
+
+			result = "_".join(split_name)
+			NameConverter.RECORD_MEMBER_NAMES[o] = result
+
+		return result
 
 	def object_entry_to_tag (o: dragoman.ObjectTypeEntry) -> str:
 		return "<<\"" + o.get_tag() + "\">>"
 
 	def enum_entry_to_atom (o: dragoman.EnumTypeEntry) -> str:
-		return o.get_name().lower()
+		result = NameConverter.ATOM_NAMES.get(o)
+
+		if result is None:
+			split_name = dragoman.NameSplitter.split(o.get_name())
+
+			result = "_".join(split_name)
+			NameConverter.RECORD_MEMBER_NAMES[o] = result
+
+		return result
 
 	def enum_entry_to_value (o: dragoman.EnumTypeEntry) -> str:
 		return "<<\"" + o.get_tag() + "\">>"
 
 	def polymorph_case_to_atom (o: dragoman.PolymorphTypeCase) -> str:
-		return o.get_name().lower()
+		result = NameConverter.ATOM_NAMES.get(o)
+
+		if result is None:
+			split_name = dragoman.NameSplitter.split(o.get_name())
+
+			result = "_".join(split_name)
+			NameConverter.RECORD_MEMBER_NAMES[o] = result
+
+		return result
 
 	def type_to_type_reference (t: dragoman.DefinedType) -> str:
 		if isinstance(t, dragoman.UserDefinedType):
 			return NameConverter.type_to_module_name(t) + ":type()"
 		else:
-			return t.get_name().lower()
+			name = t.get_name().lower()
 
-	def type_to_type_export (t: dragoman.DefinedType) -> str:
-		return t.get_name().lower()
+			if (name == "string"):
+				return "binary()"
+			else:
+				return name + "()"
 
 	def type_to_record_reference (t: dragoman.DefinedType) -> str:
-		return "#" + t.get_name().lower()
+		return "#" + NameConverter.type_to_record_name(t)
 
 class ObjectTypeConverter:
 

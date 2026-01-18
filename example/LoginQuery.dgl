@@ -1,0 +1,4 @@
+(object LoginQuery
+	(entry username usr string)
+	(entry password pwd string)
+)

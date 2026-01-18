@@ -1,0 +1,7 @@
+(object RegisterQuery
+	(entry username usr string)
+	(entry password pwd string)
+	(entry displayed_name dnm string)
+	(entry avatar avt string)
+	(entry email eml string)
+)

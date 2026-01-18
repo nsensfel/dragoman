@@ -638,6 +638,33 @@ class PolymorphType (UserDefinedType):
 
 		return result
 
+class NameSplitter:
+	def split (s: str):
+		result = []
+		next_word = ""
+
+		for c in s:
+			if c.isalnum():
+				if c.isupper():
+					c = c.lower()
+
+					if (len(next_word) > 0):
+						result.append(next_word)
+						next_word = ""
+					next_word += str(c)
+				else:
+					next_word += c
+					continue
+			else:
+				if (len(next_word) > 0):
+					result.append(next_word)
+					next_word = ""
+
+		if (len(next_word) > 0):
+			result.append(next_word)
+
+		return result
+
 class DragomanLexer (Lexer):
 	tokens = {
 		#NUMBER,
