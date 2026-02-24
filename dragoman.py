@@ -196,6 +196,9 @@ class CodeWriter:
 		this.buffer = None
 		this.buffer_ends_line = False
 
+	def set_indent_style (this, indent: str):
+		this.indent_style = indent
+
 	def decrease_indent (this):
 		if (this.indent_level == 0):
 			Log.print_warning("Unable to lower indent level further.")
@@ -259,6 +262,12 @@ class CodeWriter:
 
 		this.file.close()
 
+	def title_line (this, char: str, title: str, pre: int, total: int):
+		this.start_line(char * pre)
+		this.append(title)
+		this.append(char * (total - pre - len(title)))
+		this.newline()
+
 class TokenLocation:
 	def __init__ (this, token):
 		this.filename = DragomanParser.CURRENT_FILE
@@ -321,7 +330,7 @@ class ArrayOfDefinedType (DefinedType):
 		this.parent = parent
 
 	def get_parent (this):
-		return parent
+		return this.parent
 
 class UserDefinedType (DefinedType):
 	COLLECTION = dict()
@@ -609,12 +618,26 @@ class PolymorphType (UserDefinedType):
 		this.tag = tag
 		this.enum_type = enum_type
 		this.cases = cases
+		this.dependencies = set() # Types to include so members are defined.
+
+		for entry in cases.values():
+			dependency = entry.get_type()
+
+			while (isinstance(dependency, ArrayOfDefinedType)):
+				dependency = dependency.get_parent()
+
+			if (isinstance(dependency, UserDefinedType)):
+				this.dependencies.add(dependency)
 
 	def get_tag (this) -> str:
 		return this.tag
 
 	def get_enum_type (this) -> EnumType:
 		return this.enum_type
+
+	def get_dependencies (this) -> set[UserDefinedType]:
+		return this.dependencies
+
 	def get_cases_as_dict (this) -> dict[str, PolymorphTypeCase]:
 		return this.cases
 
@@ -1088,23 +1111,36 @@ class DragomanParser (Parser):
 			DragomanParser.PARSED_FILES.add(module_name)
 			Log.print_debug("Loaded module " + module_name + ".")
 
-if __name__ == '__main__':
-	t0 = DefinedType("string")
-	t0.register()
+class Dragoman:
+	def initialize ():
+		t0 = DefinedType("string")
+		t0.register()
 
-	t0 = DefinedType("integer")
-	t0.register()
+		t0 = DefinedType("integer")
+		t0.register()
+
+		t0 = DefinedType("boolean")
+		t0.register()
+
+		t0 = DefinedType("float")
+		t0.register()
+
+	def print ():
+		print("---- Enum Types:")
+		for e in EnumType.get_all():
+			print(e.to_string())
+
+		print("\n---- Object Types:")
+		for e in ObjectType.get_all():
+			print(e.to_string())
+
+		print("\n---- Polymorph Types:")
+		for e in PolymorphType.get_all():
+			print(e.to_string())
+
+if __name__ == '__main__':
+	Dragoman.initialize()
 
 	DragomanParser.parse_file('test')
 
-	print("---- Enum Types:")
-	for e in EnumType.get_all():
-		print(e.to_string())
-
-	print("\n---- Object Types:")
-	for e in ObjectType.get_all():
-		print(e.to_string())
-
-	print("\n---- Polymorph Types:")
-	for e in PolymorphType.get_all():
-		print(e.to_string())
+	Dragoman.print()

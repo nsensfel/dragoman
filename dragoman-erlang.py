@@ -739,22 +739,20 @@ class PolymorphTypeConverter:
 
 		code_writer.finalize()
 
+class Dragoman2Erlang:
+	def export ():
+		for e in dragoman.EnumType.get_all():
+			EnumTypeConverter.convert(e)
+
+		for e in dragoman.ObjectType.get_all():
+			ObjectTypeConverter.convert(e)
+
+		for e in dragoman.PolymorphType.get_all():
+			PolymorphTypeConverter.convert(e)
 
 if __name__ == '__main__':
-	t0 = dragoman.DefinedType("string")
-	t0.register()
-
-	t0 = dragoman.DefinedType("integer")
-	t0.register()
+	dragoman.Dragoman.initialize()
 
 	dragoman.DragomanParser.parse_file('test')
 
-
-	for e in dragoman.EnumType.get_all():
-		EnumTypeConverter.convert(e)
-
-	for e in dragoman.ObjectType.get_all():
-		ObjectTypeConverter.convert(e)
-
-	for e in dragoman.PolymorphType.get_all():
-		PolymorphTypeConverter.convert(e)
+	Dragoman2Erlang.export()
