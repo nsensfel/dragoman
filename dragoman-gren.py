@@ -1,5 +1,7 @@
 #!/bin/env python3
 
+from pathlib import Path
+
 import dragoman
 
 class NameConverter:
@@ -63,7 +65,21 @@ class NameConverter:
 		return o.get_name()
 
 	def type_to_type_reference (t: dragoman.DefinedType) -> str:
-		if isinstance(t, dragoman.UserDefinedType):
+		if isinstance(t, dragoman.ArrayOfDefinedType):
+			return (
+				"(Array "
+				+ NameConverter.type_to_type_reference(t.get_parent())
+				+ ")"
+			)
+		elif isinstance(t, dragoman.DictOfDefinedType):
+			return (
+				"(Dict.Dict "
+				+ NameConverter.type_to_type_reference(t.get_field_type())
+				+ " "
+				+ NameConverter.type_to_type_reference(t.get_parent())
+				+ ")"
+			)
+		elif isinstance(t, dragoman.UserDefinedType):
 			return NameConverter.type_to_module_name(t) + ".Type"
 		else:
 			name = t.get_name().lower()
@@ -145,13 +161,14 @@ class ObjectTypeConverter:
 		cw.line(")")
 		cw.decrease_indent()
 
-		cw.line("new ")
+		cw.start_line("new ")
 
 		for e in object_type.get_entries():
 			cw.append(NameConverter.object_entry_to_variable(e))
 			cw.append(" ")
 
 		cw.append("=")
+		cw.newline()
 		cw.increase_indent()
 		cw.line("{")
 		cw.increase_indent()
@@ -242,7 +259,23 @@ class ObjectTypeConverter:
 
 			cw.start_line("value = ")
 			if (isinstance(et, dragoman.ArrayOfDefinedType)):
-				cw.append("[]") # TODO: implement
+				cw.append("(")
+				cw.increase_indent()
+				cw.newline()
+				cw.line(value_access)
+				if (isinstance(et, dragoman.UserDefinedType)):
+					cw.append("|> (")
+					cw.append(NameConverter.type_to_module_name(et))
+					cw.append(".encode ")
+					cw.append(")")
+					cw.newline()
+				else:
+					cw.line("|> (ENCODE_BASIC)")
+				(depth, leaf_type) = et.compute_depth()
+				for i in range(0, depth):
+					cw.line("|> Json.Encode.array ")
+				cw.decrease_indent()
+				cw.start_line(")")
 			elif (isinstance(et, dragoman.UserDefinedType)):
 				cw.append("(")
 				cw.append(NameConverter.type_to_module_name(et))
@@ -250,7 +283,7 @@ class ObjectTypeConverter:
 				cw.append(value_access)
 				cw.append(")")
 			else:
-				cw.append(value_access)
+				cw.append("(ENCODE_BASIC " +  value_access + ")")
 			cw.newline()
 
 			cw.decrease_indent()
@@ -273,7 +306,7 @@ class ObjectTypeConverter:
 		if (isinstance(defined_type, dragoman.ArrayOfDefinedType)):
 			return (
 				"(Json.Decode.array "
-				+ get_decoder_for(defined_type.get_parent())
+				+ ObjectTypeConverter.get_decoder_for(defined_type.get_parent())
 				+ ")"
 			)
 		elif (isinstance(defined_type, dragoman.UserDefinedType)):
@@ -318,8 +351,10 @@ class ObjectTypeConverter:
 		cw.newline()
 
 	def convert (e: dragoman.ObjectType):
-		code_writer = dragoman.CodeWriter(NameConverter.type_to_filename(e))
-		code_writer.set_indent_style("   ")
+		code_writer = dragoman.CodeWriter(
+			Path(dragoman.Dragoman.OUTPUT_FOLDER)
+			/ NameConverter.type_to_filename(e)
+		)
 
 		code_writer.start_line("module ")
 		code_writer.append(NameConverter.type_to_module_name(e))
@@ -341,6 +376,17 @@ class ObjectTypeConverter:
 		code_writer.title_line("-", " IMPORTS ", 2, 80)
 		code_writer.title_line("-", "", 0, 80)
 		code_writer.title_line("-", " Standard Library ", 2, 80)
+
+		for a in e.get_entries():
+			(depth, leaf_type) = dragoman.ArrayOfDefinedType.compute_depth(
+				a.get_type()
+			)
+
+			if (isinstance(leaf_type, dragoman.DictOfDefinedType)):
+				code_writer.line("import Dict")
+				code_writer.newline()
+				break
+
 		code_writer.line("import Json.Decode")
 		code_writer.line("import Json.Encode")
 		code_writer.newline()
@@ -541,8 +587,10 @@ class EnumTypeConverter:
 		cw.newline()
 
 	def convert (e: dragoman.EnumType):
-		code_writer = dragoman.CodeWriter(NameConverter.type_to_filename(e))
-		code_writer.set_indent_style("   ")
+		code_writer = dragoman.CodeWriter(
+			Path(dragoman.Dragoman.OUTPUT_FOLDER)
+			/ NameConverter.type_to_filename(e)
+		)
 
 		code_writer.start_line("module ")
 		code_writer.append(NameConverter.type_to_module_name(e))
@@ -681,7 +729,7 @@ class PolymorphTypeConverter:
 		cw.line(")")
 
 		cw.start_line("(Json.Decode.field \"")
-		cw.append(polymorph_type.get_tag())
+		cw.append(polymorph_type.get_key_field_tag())
 		cw.append("\" (")
 		cw.append(NameConverter.type_to_module_name(etype))
 		cw.append(".decoder))")
@@ -692,8 +740,10 @@ class PolymorphTypeConverter:
 		cw.newline()
 
 	def convert (e: dragoman.PolymorphType):
-		code_writer = dragoman.CodeWriter(NameConverter.type_to_filename(e))
-		code_writer.set_indent_style("   ")
+		code_writer = dragoman.CodeWriter(
+			Path(dragoman.Dragoman.OUTPUT_FOLDER)
+			/ NameConverter.type_to_filename(e)
+		)
 
 		code_writer.start_line("module ")
 		code_writer.append(NameConverter.type_to_module_name(e))
@@ -751,6 +801,15 @@ class PolymorphTypeConverter:
 		code_writer.finalize()
 
 class Dragoman2Gren:
+	def initialize ():
+		dragoman.CodeWriter.DEFAULT_INDENT = "   "
+
+		argparser = dragoman.Dragoman.initialize()
+		args = argparser.parse_args()
+
+		dragoman.Dragoman.handle_arguments(args)
+		dragoman.DragomanParser.parse_file(str(args.dgl_file[0]))
+
 	def export ():
 		for e in dragoman.EnumType.get_all():
 			EnumTypeConverter.convert(e)
@@ -762,8 +821,5 @@ class Dragoman2Gren:
 			PolymorphTypeConverter.convert(e)
 
 if __name__ == '__main__':
-	dragoman.Dragoman.initialize()
-
-	dragoman.DragomanParser.parse_file('test')
-
+	Dragoman2Gren.initialize()
 	Dragoman2Gren.export()

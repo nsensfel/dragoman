@@ -1,5 +1,7 @@
 #!/bin/env python3
 
+from pathlib import Path
+
 import dragoman
 
 class NameConverter:
@@ -84,6 +86,20 @@ class NameConverter:
 	def type_to_type_reference (t: dragoman.DefinedType) -> str:
 		if isinstance(t, dragoman.UserDefinedType):
 			return NameConverter.type_to_module_name(t) + ":type()"
+		elif isinstance(t, dragoman.ArrayOfDefinedType):
+			return (
+				"list("
+				+ NameConverter.type_to_type_reference(t.get_parent())
+				+ ")"
+			)
+		elif isinstance(t, dragoman.DictOfDefinedType):
+			return (
+				"#{"
+				+ NameConverter.type_to_type_reference(t.get_field_type())
+				+ " => "
+				+ NameConverter.type_to_type_reference(t.get_parent())
+				+ "}"
+			)
 		else:
 			name = t.get_name().lower()
 
@@ -163,6 +179,30 @@ class ObjectTypeConverter:
 			cw.start_line("set_")
 			cw.append(entry_name)
 			cw.append("/2")
+
+			if (Dragoman2Erlang.ENABLE_ATAXIA):
+				cw.append(",")
+				cw.newline()
+				cw.start_line("get_")
+				cw.append(entry_name)
+				cw.append("_field/0,")
+				cw.newline()
+
+				cw.start_line("ataxia_set_")
+				cw.append(entry_name)
+				cw.append("/2")
+
+				if (
+					isinstance(e.get_type(), dragoman.UserDefinedType)
+					or isinstance(e.get_type(), dragoman.ArrayOfDefinedType)
+					or isinstance(e.get_type(), dragoman.DictOfDefinedType)
+				):
+					cw.append(",")
+					cw.newline()
+					cw.start_line("ataxia_update_")
+					cw.append(entry_name)
+					cw.append("/3")
+
 			cw.set_buffer(",")
 			cw.mark_buffer_as_ending_line()
 
@@ -255,6 +295,87 @@ class ObjectTypeConverter:
 		cw.newline()
 		cw.newline()
 
+	def add_ataxia_set_function (
+		cw: dragoman.CodeWriter,
+		ot: dragoman.ObjectType,
+		ote: dragoman.ObjectTypeEntry
+	):
+		entry_name = NameConverter.object_entry_to_record_member(ote)
+
+		cw.start_line("-spec ")
+		cw.append("ataxia_set_")
+		cw.append(entry_name)
+		cw.append(" (")
+		cw.append(NameConverter.type_to_type_reference(ote.get_type()))
+		cw.append(", type()) -> {ataxic:type(), type()}.")
+		cw.newline()
+
+		cw.start_line("ataxia_set_")
+		cw.append(entry_name)
+		cw.append(" (V, E) ->")
+		cw.newline()
+		cw.increase_indent()
+		cw.line("{")
+		cw.increase_indent()
+		cw.start_line("ataxic:update_field(")
+		cw.append(NameConverter.type_to_record_reference(ot))
+		cw.append(".")
+		cw.append(entry_name)
+		cw.append(", ataxic:constant(V)),")
+		cw.newline()
+		cw.start_line("E")
+		cw.append(NameConverter.type_to_record_reference(ot))
+		cw.append("{ ")
+		cw.append(entry_name)
+		cw.append(" = V }")
+		cw.newline()
+		cw.decrease_indent()
+		cw.line("}.")
+		cw.decrease_indent()
+		cw.newline()
+		cw.newline()
+
+	def add_ataxia_update_function (
+		cw: dragoman.CodeWriter,
+		ot: dragoman.ObjectType,
+		ote: dragoman.ObjectTypeEntry
+	):
+		entry_name = NameConverter.object_entry_to_record_member(ote)
+
+		cw.start_line("-spec ")
+		cw.append("ataxia_update_")
+		cw.append(entry_name)
+		cw.append(" (ataxic:type(), ")
+		cw.append(NameConverter.type_to_type_reference(ote.get_type()))
+		cw.append(", type()) -> {ataxic:type(), type()}.")
+		cw.newline()
+
+		cw.start_line("ataxia_update_")
+		cw.append(entry_name)
+		cw.append(" (U, V, E) ->")
+		cw.newline()
+		cw.increase_indent()
+		cw.line("{")
+		cw.increase_indent()
+		cw.start_line("ataxic:update_field(")
+		cw.append(NameConverter.type_to_record_reference(ot))
+		cw.append(".")
+		cw.append(entry_name)
+		cw.append(", ")
+		cw.append("U),")
+		cw.newline()
+		cw.start_line("E")
+		cw.append(NameConverter.type_to_record_reference(ot))
+		cw.append("{ ")
+		cw.append(entry_name)
+		cw.append(" = V }")
+		cw.newline()
+		cw.decrease_indent()
+		cw.line("}.")
+		cw.decrease_indent()
+		cw.newline()
+		cw.newline()
+
 	def add_get_function (
 		cw: dragoman.CodeWriter,
 		ot: dragoman.ObjectType,
@@ -277,6 +398,29 @@ class ObjectTypeConverter:
 		cw.append("{ ")
 		cw.append(entry_name)
 		cw.append(" = V }) -> V.")
+		cw.newline()
+		cw.newline()
+
+	def add_get_field_function (
+		cw: dragoman.CodeWriter,
+		ot: dragoman.ObjectType,
+		ote: dragoman.ObjectTypeEntry
+	):
+		entry_name = NameConverter.object_entry_to_record_member(ote)
+
+		cw.start_line("-spec ")
+		cw.append("get_")
+		cw.append(entry_name)
+		cw.append("_field () -> non_neg_integer().")
+		cw.newline()
+
+		cw.start_line("get_")
+		cw.append(entry_name)
+		cw.append("_field () -> ")
+		cw.append(NameConverter.type_to_record_reference(ot))
+		cw.append(".")
+		cw.append(entry_name)
+		cw.append(".")
 		cw.newline()
 		cw.newline()
 
@@ -306,15 +450,58 @@ class ObjectTypeConverter:
 				+ NameConverter.object_entry_to_record_member(e)
 			)
 
-			if (isinstance(et, dragoman.ArrayOfDefinedType)):
-				cw.append("[]") # TODO: implement
-			elif (isinstance(et, dragoman.UserDefinedType)):
-				cw.append(NameConverter.type_to_module_name(et))
-				cw.append(":json_export(")
+			(depth, leaf_type) = dragoman.ArrayOfDefinedType.compute_depth(et)
+
+			if (
+				(not isinstance(leaf_type, dragoman.UserDefinedType))
+				and (not isinstance(leaf_type, dragoman.DictOfDefinedType))
+			):
 				cw.append(value_access)
-				cw.append(")")
+			elif (depth == 0):
+				if (isinstance(leaf_type, dragoman.DictOfDefinedType)):
+					cw.append("lists:map(fun ")
+					cw.append(
+						NameConverter.type_to_module_name(leaf_type.get_parent())
+					)
+					cw.append(":json_export/1, maps:values(")
+					cw.append(value_access)
+					cw.append("))")
+				else:
+					cw.append(NameConverter.type_to_module_name(et))
+					cw.append(":json_export(")
+					cw.append(value_access)
+					cw.append(")")
+			elif (depth == 1):
+				if (isinstance(leaf_type, dragoman.DictOfDefinedType)):
+					cw.append("lists:map(fun (Y) -> lists:map(fun ")
+					cw.append(
+						NameConverter.type_to_module_name(leaf_type.get_parent())
+					)
+					cw.append(":json_export/1, maps:values(Y)) end, ")
+					cw.append(value_access)
+					cw.append(")")
+				else:
+					cw.append("lists:map(fun ")
+					cw.append(NameConverter.type_to_module_name(leaf_type))
+					cw.append(":json_export/1, ")
+					cw.append(value_access)
+					cw.append(")")
 			else:
+				cw.append("lists_deep_map(")
+				cw.append(str(depth - 1))
+				cw.append(", ")
 				cw.append(value_access)
+				cw.append(", fun ")
+				if (isinstance(leaf_type, dragoman.DictOfDefinedType)):
+					cw.append("(Y) -> ")
+					cw.append("lists:map(fun ")
+					cw.append(
+						NameConverter.type_to_module_name(leaf_type.get_parent())
+					)
+					cw.append(":json_export/1, Y) end)")
+				else:
+					cw.append(NameConverter.type_to_module_name(leaf_type))
+					cw.append(":json_export/1)")
 
 			cw.append(" }")
 			cw.set_buffer(",")
@@ -328,6 +515,17 @@ class ObjectTypeConverter:
 		cw.line("}.")
 		cw.decrease_indent()
 		cw.newline()
+
+	def add_deep_map_function (
+		cw: dragoman.CodeWriter,
+		object_type: dragoman.ObjectType
+	):
+		cw.line("-spec lists_deep_map (non_neg_int(), list(any()), fun()) -> list().")
+		cw.line("lists_deep_map (0, List, Fun) -> lists:map(Fun, List);")
+		cw.line("lists_deep_map (RemainingDepth, List, Fun) ->")
+		cw.increase_indent()
+		cw.line("[ lists_deep_map(RemainingDepth - 1, E, Fun) || E <- List ].")
+		cw.decrease_indent()
 
 	def add_json_import_function (
 		cw: dragoman.CodeWriter,
@@ -352,15 +550,78 @@ class ObjectTypeConverter:
 				+ ", D)"
 			)
 
-			if (isinstance(et, dragoman.ArrayOfDefinedType)):
-				cw.append("[]") # TODO: implement
-			elif (isinstance(et, dragoman.UserDefinedType)):
-				cw.append(NameConverter.type_to_module_name(et))
-				cw.append(":json_import(")
-				cw.append(value_access)
-				cw.append(")")
+			(depth, leaf_type) = dragoman.ArrayOfDefinedType.compute_depth(et)
+
+			if (depth == 0):
+				if (isinstance(leaf_type, dragoman.DictOfDefinedType)):
+					cw.append("lists:fold(fun (X, Map) -> E = ")
+					cw.append(
+						NameConverter.type_to_module_name(leaf_type.get_parent())
+					)
+					cw.append(":json_import(X), maps:put(")
+					cw.append(
+						NameConverter.type_to_module_name(leaf_type.get_parent())
+					)
+					cw.append(":get_")
+					cw.append(leaf_type.get_field_name())
+					cw.append("(E), E, Map) end, maps:new(), ")
+					cw.append(value_access)
+					cw.append(")")
+				elif (isinstance(leaf_type, dragoman.UserDefinedType)):
+					cw.append(NameConverter.type_to_module_name(et))
+					cw.append(":json_import(")
+					cw.append(value_access)
+					cw.append(")")
+				else:
+					cw.append(value_access)
+			elif (depth == 1):
+				if (isinstance(leaf_type, dragoman.DictOfDefinedType)):
+					cw.append("lists:map(fun (Y) -> ")
+					cw.append("lists:fold(fun (X, Map) -> E = ")
+					cw.append(
+						NameConverter.type_to_module_name(leaf_type.get_parent())
+					)
+					cw.append(":json_import(X), maps:put(")
+					cw.append(
+						NameConverter.type_to_module_name(leaf_type.get_parent())
+					)
+					cw.append(":get_")
+					cw.append(leaf_type.get_key_field_name())
+					cw.append("(E), E, Map) end, maps:new(), Y) end, ")
+					cw.append(value_access)
+					cw.append(")")
+				elif (isinstance(leaf_type, dragoman.UserDefinedType)):
+					cw.append("lists:map(fun ")
+					cw.append(NameConverter.type_to_module_name(leaf_type))
+					cw.append(":json_import/1, ")
+					cw.append(value_access)
+					cw.append(")")
+				else:
+					cw.append(value_access)
 			else:
+				cw.append("lists_deep_map(")
+				cw.append(str(depth - 1))
+				cw.append(", ")
 				cw.append(value_access)
+				cw.append(", fun ")
+				if (isinstance(leaf_type, dragoman.DictOfDefinedType)):
+					cw.append("(Y) -> ")
+					cw.append("lists:fold(fun (X, Map) -> E = ")
+					cw.append(
+						NameConverter.type_to_module_name(leaf_type.get_parent())
+					)
+					cw.append(":json_import(X), maps:put(")
+					cw.append(
+						NameConverter.type_to_module_name(leaf_type.get_parent())
+					)
+					cw.append(":get_")
+					cw.append(leaf_type.get_field_name())
+					cw.append("(E), E, Map) end, maps:new(), Y) end)")
+				elif (isinstance(leaf_type, dragoman.UserDefinedType)):
+					cw.append(NameConverter.type_to_module_name(leaf_type))
+					cw.append(":json_import/1)")
+				else:
+					cw.append(value_access)
 
 			cw.set_buffer(",")
 			cw.mark_buffer_as_ending_line()
@@ -374,17 +635,47 @@ class ObjectTypeConverter:
 
 	def convert (e: dragoman.ObjectType):
 		code_writer = dragoman.CodeWriter(
-			NameConverter.type_to_module_name(e)
-			+ ".erl"
+			Path(dragoman.Dragoman.OUTPUT_FOLDER)
+			/ (NameConverter.type_to_module_name(e) + ".erl")
 		)
 
 		code_writer.start_line("-module(")
 		code_writer.append(NameConverter.type_to_module_name(e))
 		code_writer.append(").")
 		code_writer.newline()
+		code_writer.newline()
+
+		code_writer.title_line("%", "", 0, 80)
+		code_writer.title_line("%", " TYPES ", 2, 80)
+		code_writer.title_line("%", "", 0, 80)
 
 		ObjectTypeConverter.add_record(code_writer, e)
+		code_writer.newline()
+
+		code_writer.title_line("%", "", 0, 80)
+		code_writer.title_line("%", " EXPORTS ", 2, 80)
+		code_writer.title_line("%", "", 0, 80)
 		ObjectTypeConverter.add_exports(code_writer, e)
+		code_writer.newline()
+
+		code_writer.title_line("%", "", 0, 80)
+		code_writer.title_line("%", " LOCAL FUNCTIONS ", 2, 80)
+		code_writer.title_line("%", "", 0, 80)
+
+		for i in e.get_entries():
+			(depth, leaf_type) = dragoman.ArrayOfDefinedType.compute_depth(
+				i.get_type()
+			)
+
+			if (depth > 1):
+				ObjectTypeConverter.add_deep_map_function(code_writer, e)
+				break
+
+		code_writer.newline()
+
+		code_writer.title_line("%", "", 0, 80)
+		code_writer.title_line("%", " EXPORTED FUNCTIONS ", 2, 80)
+		code_writer.title_line("%", "", 0, 80)
 
 		ObjectTypeConverter.add_json_export_function(code_writer, e)
 		ObjectTypeConverter.add_json_import_function(code_writer, e)
@@ -394,6 +685,18 @@ class ObjectTypeConverter:
 		for i in e.get_entries():
 			ObjectTypeConverter.add_get_function(code_writer, e, i)
 			ObjectTypeConverter.add_set_function(code_writer, e, i)
+
+			if (Dragoman2Erlang.ENABLE_ATAXIA):
+				ObjectTypeConverter.add_ataxia_set_function(code_writer, e, i)
+
+				if (
+					isinstance(i.get_type(), dragoman.UserDefinedType)
+					or isinstance(i.get_type(), dragoman.ArrayOfDefinedType)
+					or isinstance(i.get_type(), dragoman.DictOfDefinedType)
+				):
+					ObjectTypeConverter.add_ataxia_update_function(code_writer, e, i)
+
+				ObjectTypeConverter.add_get_field_function(code_writer, e, i)
 
 		code_writer.finalize()
 
@@ -513,8 +816,8 @@ class EnumTypeConverter:
 
 	def convert (e: dragoman.EnumType):
 		code_writer = dragoman.CodeWriter(
-			NameConverter.type_to_module_name(e)
-			+ ".erl"
+			Path(dragoman.Dragoman.OUTPUT_FOLDER)
+			/ (NameConverter.type_to_module_name(e) + ".erl")
 		)
 
 		code_writer.start_line("-module(")
@@ -563,7 +866,7 @@ class PolymorphTypeConverter:
 			cw.increase_indent()
 
 			for build_param in pcase.get_type().get_entries():
-				if (build_param.get_tag() == polymorph_type.get_tag()):
+				if (build_param.get_name() == polymorph_type.get_key_field_name()):
 					# This is a constant, at this level.
 					continue
 
@@ -586,7 +889,7 @@ class PolymorphTypeConverter:
 			cw.increase_indent()
 
 			for build_param in pcase.get_type().get_entries():
-				if (build_param.get_tag() == polymorph_type.get_tag()):
+				if (build_param.get_name() == polymorph_type.get_key_field_name()):
 					# This is a constant, at this level.
 					continue
 
@@ -607,7 +910,7 @@ class PolymorphTypeConverter:
 			cw.increase_indent()
 
 			for build_param in pcase.get_type().get_entries():
-				if (build_param.get_tag() == polymorph_type.get_tag()):
+				if (build_param.get_name() == polymorph_type.get_key_field_name()):
 					cw.start_line(
 						NameConverter.enum_entry_to_atom(
 							polymorph_type.get_enum_type().get_entry_from_name(
@@ -693,7 +996,7 @@ class PolymorphTypeConverter:
 		cw.line("json_import (D) ->")
 		cw.increase_indent()
 		cw.start_line("V = dict:get(<<\"")
-		cw.append(polymorph_type.get_tag())
+		cw.append(polymorph_type.get_key_field_tag())
 		cw.append("\">>, D),")
 		cw.newline()
 		cw.line("if")
@@ -720,8 +1023,8 @@ class PolymorphTypeConverter:
 
 	def convert (e: dragoman.PolymorphType):
 		code_writer = dragoman.CodeWriter(
-			NameConverter.type_to_module_name(e)
-			+ ".erl"
+			Path(dragoman.Dragoman.OUTPUT_FOLDER)
+			/ (NameConverter.type_to_module_name(e) + ".erl")
 		)
 
 		code_writer.start_line("-module(")
@@ -740,6 +1043,25 @@ class PolymorphTypeConverter:
 		code_writer.finalize()
 
 class Dragoman2Erlang:
+	ENABLE_ATAXIA = False
+
+	def initialize ():
+		argparser = dragoman.Dragoman.initialize()
+		argparser.add_argument(
+			"--ataxia",
+			action="store_true",
+			default=False,
+			help="Enable Ataxia functions"
+		)
+
+		args = argparser.parse_args()
+
+		if args.ataxia:
+			Dragoman2Erlang.ENABLE_ATAXIA = True
+
+		dragoman.Dragoman.handle_arguments(args)
+		dragoman.DragomanParser.parse_file(str(args.dgl_file[0]))
+
 	def export ():
 		for e in dragoman.EnumType.get_all():
 			EnumTypeConverter.convert(e)
@@ -751,8 +1073,5 @@ class Dragoman2Erlang:
 			PolymorphTypeConverter.convert(e)
 
 if __name__ == '__main__':
-	dragoman.Dragoman.initialize()
-
-	dragoman.DragomanParser.parse_file('test')
-
+	Dragoman2Erlang.initialize()
 	Dragoman2Erlang.export()

@@ -1,9 +1,16 @@
 (require ServerReplyID)
 
 (require ErrorReply)
+(require SetRoomReply)
 (require SetSessionReply)
 
-(polymorph ServerReply msg
+(object TestDeepMap
+	(entry basic_deep_map (array (array integer)))
+	(entry user_deep_map (array (array ErrorReply)))
+	(entry dict_deep_map (array (array (dict id RoomObject ))))
+)
+(polymorph ServerReply message_id
 	(case ERROR ErrorReply)
 	(case SET_SESSION SetSessionReply)
+	(case SET_ROOM SetRoomReply)
 )

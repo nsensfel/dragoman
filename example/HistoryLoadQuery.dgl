@@ -2,6 +2,6 @@
 	(entry user_id uid string)
 	(entry session_token tkn string)
 	(entry user_version uvr integer)
-	(entry room_id string)
+	(entry room_id rmi string)
 	(entry history_index hix integer)
 )

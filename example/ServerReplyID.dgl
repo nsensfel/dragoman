@@ -1,4 +1,8 @@
 (enum ServerReplyID string
+	(entry DISCONNECT dis)
 	(entry ERROR err)
+	(entry HISTORY_UPDATE hup)
+	(entry PENDING_ROOMS_UPDATE pru)
+	(entry SET_ROOM sro)
 	(entry SET_SESSION sst)
 )
