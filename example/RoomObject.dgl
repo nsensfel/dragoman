@@ -1,0 +1,49 @@
+(enum RoomObjectTypeID string
+	(entry CARD crd)
+	(entry DICE dic)
+	(entry DECK dek)
+)
+
+(object RoomObjectAttitude
+	(entry x x integer)
+	(entry y y integer)
+	(entry z z integer)
+	(entry angle ang integer)
+)
+
+(object RoomObjectCard
+	(entry object_type obt RoomObjectTypeID)
+	(entry front_url fur string)
+	(entry back_url bur string)
+	(entry is_flipped ifl boolean)
+	(entry is_displayed ids boolean)
+)
+
+(object RoomObjectDice
+	(entry object_type obt RoomObjectTypeID)
+	(entry faces fcs (array string))
+	(entry active_face acf integer)
+)
+
+(object RoomObjectDeck
+	(entry object_type obt RoomObjectTypeID)
+	(entry url url string)
+	(entry shows_card shc boolean)
+	(entry contains cnt (array string))
+)
+
+(polymorph RoomObjectProperties object_type
+	(case CARD RoomObjectCard)
+	(case DICE RoomObjectDice)
+	(case DECK RoomObjectDeck)
+)
+
+(object RoomObject
+	(entry id id string)
+	(entry is_locked loc boolean)
+	(entry tags tgs (array string))
+	(entry width wid integer)
+	(entry height hei integer)
+	(entry attitude att RoomObjectAttitude)
+	(entry properties pro RoomObjectProperties)
+)

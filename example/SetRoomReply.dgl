@@ -1,0 +1,21 @@
+;;(require LobbyEntry)
+(require RoomAction)
+(require RoomObject)
+;;(require RoomUser)
+(require ServerReplyID)
+
+(object Room
+	(entry name nam string)
+	(entry game_id gid string)
+	(entry objects obj (dict id RoomObject))
+	(entry history his (array RoomAction))
+	(entry history_index hid integer)
+	;;(entry lobby lby (array LobbyEntry))
+	;;(entry chat cht Chat)
+	;;(entry users usr (array RoomUser))
+)
+
+(object SetRoomReply
+	(entry message_id msg ServerReplyID)
+	(entry room rom Room)
+)

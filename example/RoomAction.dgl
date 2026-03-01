@@ -1,0 +1,21 @@
+(enum RoomActionID string
+	(entry MOVE mov)
+)
+
+(object RoomActionMove
+	(entry action_type act RoomActionID)
+	(entry object_ids oid (array string))
+	(entry x_offset xof integer)
+	(entry y_offset yof integer)
+	(entry z_offset zof integer)
+	(entry angle_offset aof integer)
+)
+
+(polymorph RoomActionDetails action_type
+	(case MOVE RoomActionMove)
+)
+
+(object RoomAction
+	(entry actor_id aid string)
+	(entry details det RoomActionDetails)
+)
