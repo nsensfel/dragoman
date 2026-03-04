@@ -346,10 +346,10 @@ class ArrayOfDefinedType (DefinedType):
 
 class DictOfDefinedType (DefinedType):
 	def __init__ (
-			this,
-			field_name: str,
-			field_type: DefinedType,
-			parent: DefinedType
+		this,
+		field_name: str,
+		field_type: DefinedType,
+		parent: DefinedType
 	):
 		DefinedType.__init__(
 			this,
@@ -492,6 +492,10 @@ class ObjectType (UserDefinedType):
 				isinstance(dependency, ArrayOfDefinedType)
 				or isinstance(dependency, DictOfDefinedType)
 			):
+				if (isinstance(dependency, DictOfDefinedType)):
+					field_type = dependency.get_field_type()
+					if (isinstance(field_type, UserDefinedType)):
+						this.dependencies.add(field_type)
 				dependency = dependency.get_parent()
 
 			if (isinstance(dependency, UserDefinedType)):
@@ -685,6 +689,8 @@ class PolymorphType (UserDefinedType):
 
 		this.dependencies = set() # Types to include so members are defined.
 
+		this.dependencies.add(enum_type)
+
 		for entry in cases.values():
 			dependency = entry.get_type()
 
@@ -692,6 +698,10 @@ class PolymorphType (UserDefinedType):
 				isinstance(dependency, ArrayOfDefinedType)
 				or isinstance(dependency, DictOfDefinedType)
 			):
+				if (isinstance(dependency, DictOfDefinedType)):
+					field_type = dependency.get_field_type()
+					if (isinstance(field_type, UserDefinedType)):
+						this.dependencies.add(field_type)
 				dependency = dependency.get_parent()
 
 			if (isinstance(dependency, UserDefinedType)):

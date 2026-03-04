@@ -252,7 +252,7 @@ class ObjectTypeConverter:
 			cw.increase_indent()
 			cw.start_line("key = ")
 			cw.append(NameConverter.object_entry_to_tag(e))
-			cw.append(", ")
+			cw.append(",")
 			cw.newline()
 
 			value_access = "e." + NameConverter.object_entry_to_record_member(e)
@@ -273,7 +273,7 @@ class ObjectTypeConverter:
 					cw.append(".encode)")
 					cw.newline()
 				elif (isinstance(leaf_type, dragoman.DictOfDefinedType)):
-					cw.start_line("(\ d -> (Json.Encode.array ")
+					cw.start_line("(\\ d -> (Json.Encode.array ")
 					cw.append(
 						NameConverter.type_to_module_name(leaf_type.get_parent())
 					)
@@ -288,6 +288,8 @@ class ObjectTypeConverter:
 						cw.line("(Json.Encode.string)")
 					elif (type_name == "float"):
 						cw.line("(Json.Encode.float)")
+					elif (type_name == "boolean"):
+						cw.line("(Json.Encode.bool)")
 					else:
 						cw.line("(ENCODE_BASIC " + type_name + ")")
 
@@ -304,6 +306,14 @@ class ObjectTypeConverter:
 				cw.append(".encode ")
 				cw.append(value_access)
 				cw.append(")")
+			elif (isinstance(et, dragoman.DictOfDefinedType)):
+				cw.append("(Json.Encode.array ")
+				cw.append(
+					NameConverter.type_to_module_name(et.get_parent())
+				)
+				cw.append(".encode (Dict.values ")
+				cw.append(value_access)
+				cw.append("))")
 			else:
 				type_name = et.get_name()
 
@@ -313,6 +323,8 @@ class ObjectTypeConverter:
 					cw.append("(Json.Encode.string ")
 				elif (type_name == "float"):
 					cw.append("(Json.Encode.float ")
+				elif (type_name == "boolean"):
+					cw.append("(Json.Encode.bool ")
 				else:
 					cw.append("(ENCODE_BASIC ")
 
@@ -347,7 +359,7 @@ class ObjectTypeConverter:
 			parent_type = defined_type.get_parent()
 			return (
 				"(Json.Decode.map "
-				+ "(Array.foldl (\ el acc -> (Dict.set ("
+				+ "(Array.foldl (\\ el acc -> (Dict.set ("
 				+ NameConverter.type_to_module_name(parent_type)
 				+ ".get_"
 				+ defined_type.get_field_name()
@@ -502,7 +514,6 @@ class EnumTypeConverter:
 		cw.line("Type,")
 		cw.line("decoder,")
 		cw.line("encode,")
-		cw.line("new,")
 		cw.line("get_value,")
 		cw.line("maybe_from_value")
 
@@ -604,7 +615,7 @@ class EnumTypeConverter:
 	):
 		parent_type_name = enum_type.get_parent_type().get_name().lower()
 
-		cw.line("decoder: (Json.Decode.decoder Type)")
+		cw.line("decoder: (Json.Decode.Decoder Type)")
 		cw.line("decoder =")
 		cw.increase_indent()
 		cw.line("(Json.Decode.andThen")
@@ -625,7 +636,7 @@ class EnumTypeConverter:
 		elif (parent_type_name == "string"):
 			cw.append("string)")
 		else:
-			cw.append("(NO ENCODE FOR " + parent_type_name + "))")
+			cw.append("(NO DECODE FOR " + parent_type_name + "))")
 		cw.newline()
 		cw.decrease_indent()
 		cw.line(")")
@@ -750,7 +761,7 @@ class PolymorphTypeConverter:
 	):
 		etype = polymorph_type.get_enum_type()
 
-		cw.line("decoder -> (Json.Decode.decoder Type)")
+		cw.line("decoder: (Json.Decode.Decoder Type)")
 		cw.line("decoder =")
 		cw.increase_indent()
 		cw.line("(Json.Decode.andThen")
@@ -774,12 +785,20 @@ class PolymorphTypeConverter:
 		cw.decrease_indent()
 		cw.line(")")
 
+		cw.line("(Json.Decode.map")
+		cw.increase_indent()
+		cw.start_line("(")
+		cw.append(NameConverter.type_to_module_name(etype))
+		cw.append(".get_value)")
+		cw.newline()
 		cw.start_line("(Json.Decode.field \"")
 		cw.append(polymorph_type.get_key_field_tag())
 		cw.append("\" (")
 		cw.append(NameConverter.type_to_module_name(etype))
 		cw.append(".decoder))")
+		cw.decrease_indent()
 		cw.newline()
+		cw.line(")")
 		cw.decrease_indent()
 		cw.line(")")
 		cw.decrease_indent()
