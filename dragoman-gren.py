@@ -511,7 +511,7 @@ class EnumTypeConverter:
 		cw: dragoman.CodeWriter,
 		enum_type: dragoman.EnumType
 	):
-		cw.line("Type,")
+		cw.line("Type(..),")
 		cw.line("decoder,")
 		cw.line("encode,")
 		cw.line("get_value,")
