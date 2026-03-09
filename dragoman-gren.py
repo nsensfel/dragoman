@@ -728,7 +728,7 @@ class PolymorphTypeConverter:
 		cw: dragoman.CodeWriter,
 		polymorph_type: dragoman.PolymorphType
 	):
-		cw.line("Type,")
+		cw.line("Type(..),")
 		cw.line("decoder,")
 		cw.line("encode")
 
