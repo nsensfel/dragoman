@@ -69,6 +69,14 @@ class NameConverter:
 
 		return result
 
+	def enum_entry_reference (o: dragoman.EnumTypeEntry) -> str:
+		return (
+			NameConverter.type_to_module_name(o.get_parent())
+			+ ":"
+			+ NameConverter.enum_entry_to_atom(o)
+			+ "()"
+		)
+
 	def enum_entry_to_value (o: dragoman.EnumTypeEntry) -> str:
 		return "<<\"" + o.get_tag() + "\">>"
 
@@ -163,7 +171,12 @@ class ObjectTypeConverter:
 		cw.line("json_import/1,")
 
 		cw.start_line("new/")
-		cw.append(str(len(object_type.get_entries())))
+		count = 0
+		for i in object_type.get_entries():
+			if (i.maybe_get_const_value() == None):
+				count += 1
+
+		cw.append(str(count))
 		cw.append(",")
 		cw.newline()
 
@@ -173,35 +186,40 @@ class ObjectTypeConverter:
 			cw.newline()
 			cw.start_line("get_")
 			cw.append(entry_name)
-			cw.append("/1,")
-			cw.newline()
+			cw.append("/1")
 
-			cw.start_line("set_")
-			cw.append(entry_name)
-			cw.append("/2")
+			if (e.maybe_get_const_value() == None):
+				cw.append(",")
+				cw.newline()
+
+				cw.start_line("set_")
+				cw.append(entry_name)
+				cw.append("/2")
 
 			if (Dragoman2Erlang.ENABLE_ATAXIA):
 				cw.append(",")
 				cw.newline()
 				cw.start_line("get_")
 				cw.append(entry_name)
-				cw.append("_field/0,")
-				cw.newline()
+				cw.append("_field/0")
 
-				cw.start_line("ataxia_set_")
-				cw.append(entry_name)
-				cw.append("/2")
-
-				if (
-					isinstance(e.get_type(), dragoman.UserDefinedType)
-					or isinstance(e.get_type(), dragoman.ArrayOfDefinedType)
-					or isinstance(e.get_type(), dragoman.DictOfDefinedType)
-				):
+				if (e.maybe_get_const_value() == None):
 					cw.append(",")
 					cw.newline()
-					cw.start_line("ataxia_update_")
+					cw.start_line("ataxia_set_")
 					cw.append(entry_name)
-					cw.append("/3")
+					cw.append("/2")
+
+					if (
+						isinstance(e.get_type(), dragoman.UserDefinedType)
+						or isinstance(e.get_type(), dragoman.ArrayOfDefinedType)
+						or isinstance(e.get_type(), dragoman.DictOfDefinedType)
+					):
+						cw.append(",")
+						cw.newline()
+						cw.start_line("ataxia_update_")
+						cw.append(entry_name)
+						cw.append("/3")
 
 			cw.set_buffer(",")
 			cw.mark_buffer_as_ending_line()
@@ -223,9 +241,10 @@ class ObjectTypeConverter:
 		cw.increase_indent()
 
 		for e in object_type.get_entries():
-			cw.start_line(NameConverter.type_to_type_reference(e.get_type()))
-			cw.set_buffer(",")
-			cw.mark_buffer_as_ending_line()
+			if (e.maybe_get_const_value() == None):
+				cw.start_line(NameConverter.type_to_type_reference(e.get_type()))
+				cw.set_buffer(",")
+				cw.mark_buffer_as_ending_line()
 
 		cw.discard_buffer()
 		cw.decrease_indent()
@@ -237,9 +256,10 @@ class ObjectTypeConverter:
 		cw.increase_indent()
 
 		for e in object_type.get_entries():
-			cw.start_line(NameConverter.object_entry_to_variable(e))
-			cw.set_buffer(",")
-			cw.mark_buffer_as_ending_line()
+			if (e.maybe_get_const_value() == None):
+				cw.start_line(NameConverter.object_entry_to_variable(e))
+				cw.set_buffer(",")
+				cw.mark_buffer_as_ending_line()
 
 		cw.discard_buffer()
 		cw.decrease_indent()
@@ -256,7 +276,33 @@ class ObjectTypeConverter:
 
 			cw.start_line(NameConverter.object_entry_to_record_member(e))
 			cw.append(" = ")
-			cw.append(NameConverter.object_entry_to_variable(e))
+
+			val = e.maybe_get_const_value()
+
+			if (val == None):
+				cw.append(NameConverter.object_entry_to_variable(e))
+			else:
+				type_name = et.get_name()
+
+				if (type_name == "integer"):
+					cw.append(val)
+				elif (type_name == "string"):
+					cw.append("<<\"")
+					cw.append(val)
+					cw.append("\">>")
+				elif (type_name == "float"):
+					cw.append(val)
+				elif (type_name == "boolean"):
+					if (val.lower() == "true"):
+						cw.append("true")
+					else:
+						cw.append("false")
+				elif (isinstance(et, dragoman.EnumType)):
+					cw.append(
+						NameConverter.enum_entry_reference(
+							et.get_entry_from_name(val)
+						)
+					)
 
 			cw.set_buffer(",")
 			cw.mark_buffer_as_ending_line()
@@ -520,7 +566,7 @@ class ObjectTypeConverter:
 		cw: dragoman.CodeWriter,
 		object_type: dragoman.ObjectType
 	):
-		cw.line("-spec lists_deep_map (non_neg_int(), list(any()), fun()) -> list().")
+		cw.line("-spec lists_deep_map (non_neg_integer(), list(any()), fun()) -> list().")
 		cw.line("lists_deep_map (0, List, Fun) -> lists:map(Fun, List);")
 		cw.line("lists_deep_map (RemainingDepth, List, Fun) ->")
 		cw.increase_indent()
@@ -539,6 +585,9 @@ class ObjectTypeConverter:
 		cw.increase_indent()
 
 		for e in object_type.get_entries():
+			if (e.maybe_get_const_value() != None):
+				continue
+
 			et = e.get_type()
 
 			cw.start_line(NameConverter.object_entry_to_record_member(e))
@@ -552,7 +601,12 @@ class ObjectTypeConverter:
 
 			(depth, leaf_type) = dragoman.ArrayOfDefinedType.compute_depth(et)
 
-			if (depth == 0):
+			if (
+				(not isinstance(leaf_type, dragoman.UserDefinedType))
+				and (not isinstance(leaf_type, dragoman.DictOfDefinedType))
+			):
+				cw.append(value_access)
+			elif (depth == 0):
 				if (isinstance(leaf_type, dragoman.DictOfDefinedType)):
 					cw.append("lists:fold(fun (X, Map) -> E = ")
 					cw.append(
@@ -684,17 +738,20 @@ class ObjectTypeConverter:
 
 		for i in e.get_entries():
 			ObjectTypeConverter.add_get_function(code_writer, e, i)
-			ObjectTypeConverter.add_set_function(code_writer, e, i)
+
+			if (i.maybe_get_const_value() == None):
+				ObjectTypeConverter.add_set_function(code_writer, e, i)
 
 			if (Dragoman2Erlang.ENABLE_ATAXIA):
-				ObjectTypeConverter.add_ataxia_set_function(code_writer, e, i)
+				if (i.maybe_get_const_value() == None):
+					ObjectTypeConverter.add_ataxia_set_function(code_writer, e, i)
 
-				if (
-					isinstance(i.get_type(), dragoman.UserDefinedType)
-					or isinstance(i.get_type(), dragoman.ArrayOfDefinedType)
-					or isinstance(i.get_type(), dragoman.DictOfDefinedType)
-				):
-					ObjectTypeConverter.add_ataxia_update_function(code_writer, e, i)
+					if (
+						isinstance(i.get_type(), dragoman.UserDefinedType)
+						or isinstance(i.get_type(), dragoman.ArrayOfDefinedType)
+						or isinstance(i.get_type(), dragoman.DictOfDefinedType)
+					):
+						ObjectTypeConverter.add_ataxia_update_function(code_writer, e, i)
 
 				ObjectTypeConverter.add_get_field_function(code_writer, e, i)
 

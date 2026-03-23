@@ -61,6 +61,13 @@ class NameConverter:
 		# TODO: support for integer values
 		return "\"" + o.get_tag() + "\""
 
+	def enum_entry_reference (o: dragoman.EnumTypeEntry) -> str:
+		return (
+			NameConverter.type_to_module_name(o.get_parent())
+			+ "."
+			+ NameConverter.enum_entry_to_atom(o)
+		)
+
 	def polymorph_case_to_atom (o: dragoman.PolymorphTypeCase) -> str:
 		return o.get_name()
 
@@ -131,12 +138,14 @@ class ObjectTypeConverter:
 			entry_name = NameConverter.object_entry_to_record_member(e)
 
 			cw.newline()
-			cw.start_line("get_")
-			cw.append(entry_name)
-			cw.append(",")
-			cw.newline()
 
-			cw.start_line("set_")
+			if (e.maybe_get_const_value() == None):
+				cw.start_line("set_")
+				cw.append(entry_name)
+				cw.append(",")
+				cw.newline()
+
+			cw.start_line("get_")
 			cw.append(entry_name)
 			cw.set_buffer(",")
 			cw.mark_buffer_as_ending_line()
@@ -152,9 +161,10 @@ class ObjectTypeConverter:
 		cw.increase_indent()
 
 		for e in object_type.get_entries():
-			cw.start_line(NameConverter.type_to_type_reference(e.get_type()))
-			cw.append(" ->")
-			cw.newline()
+			if (e.maybe_get_const_value() == None):
+				cw.start_line(NameConverter.type_to_type_reference(e.get_type()))
+				cw.append(" ->")
+				cw.newline()
 
 		cw.line("Type")
 		cw.decrease_indent()
@@ -164,8 +174,9 @@ class ObjectTypeConverter:
 		cw.start_line("new ")
 
 		for e in object_type.get_entries():
-			cw.append(NameConverter.object_entry_to_variable(e))
-			cw.append(" ")
+			if (e.maybe_get_const_value() == None):
+				cw.append(NameConverter.object_entry_to_variable(e))
+				cw.append(" ")
 
 		cw.append("=")
 		cw.newline()
@@ -178,7 +189,33 @@ class ObjectTypeConverter:
 
 			cw.start_line(NameConverter.object_entry_to_record_member(e))
 			cw.append(" = ")
-			cw.append(NameConverter.object_entry_to_variable(e))
+
+			val = e.maybe_get_const_value()
+
+			if (val == None):
+				cw.append(NameConverter.object_entry_to_variable(e))
+			else:
+				type_name = et.get_name()
+
+				if (type_name == "integer"):
+					cw.append(val)
+				elif (type_name == "string"):
+					cw.append("\"")
+					cw.append(val)
+					cw.append("\"")
+				elif (type_name == "float"):
+					cw.append(val)
+				elif (type_name == "boolean"):
+					if (val.lower() == "true"):
+						cw.append("True")
+					else:
+						cw.append("False")
+				elif (isinstance(et, dragoman.EnumType)):
+					cw.append(
+						NameConverter.enum_entry_reference(
+							et.get_entry_from_name(val)
+						)
+					)
 
 			cw.set_buffer(",")
 			cw.mark_buffer_as_ending_line()
@@ -196,6 +233,9 @@ class ObjectTypeConverter:
 		ot: dragoman.ObjectType,
 		ote: dragoman.ObjectTypeEntry
 	):
+		if (ote.maybe_get_const_value() != None):
+			return
+
 		entry_name = NameConverter.object_entry_to_record_member(ote)
 
 		cw.start_line("set_")
@@ -397,12 +437,13 @@ class ObjectTypeConverter:
 		cw.increase_indent()
 
 		for e in object_type.get_entries():
-			cw.start_line("|> (Json.Decode.andMap (Json.Decode.field ")
-			cw.append(NameConverter.object_entry_to_tag(e))
-			cw.append(" ")
-			cw.append(ObjectTypeConverter.get_decoder_for(e.get_type()))
-			cw.append("))")
-			cw.newline()
+			if (e.maybe_get_const_value() == None):
+				cw.start_line("|> (Json.Decode.andMap (Json.Decode.field ")
+				cw.append(NameConverter.object_entry_to_tag(e))
+				cw.append(" ")
+				cw.append(ObjectTypeConverter.get_decoder_for(e.get_type()))
+				cw.append("))")
+				cw.newline()
 		cw.decrease_indent()
 		cw.line(")")
 		cw.decrease_indent()

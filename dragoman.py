@@ -434,12 +434,34 @@ class ObjectTypeEntry:
 		token: TokenLocation,
 		name: str,
 		tag: str,
-		dtype: DefinedType
+		dtype: DefinedType,
+		const_value: None | str
 	):
 		this.token = token
 		this.name = name
 		this.tag = tag
 		this.dtype = dtype
+		this.const_value = const_value
+
+		if (
+			(const_value is not None)
+			and (
+				isinstance(dtype, UserDefinedType)
+				or isinstance(dtype, ArrayOfDefinedType)
+				or isinstance(dtype, DictOfDefinedType)
+			)
+			and not isinstance(dtype, EnumType)
+		):
+			Log.print_error(
+				"Cannot define const value for non-basic type '"
+				+ dtype.get_name()
+				+ "' field '"
+				+ name
+				+ "' defined at "
+				+ token.to_string()
+			)
+
+			raise Exception
 
 	def get_token (this) -> TokenLocation:
 		return this.token
@@ -452,6 +474,9 @@ class ObjectTypeEntry:
 
 	def get_type (this) -> DefinedType:
 		return this.dtype
+
+	def maybe_get_const_value (this) -> None | str:
+		return this.const_value
 
 	def to_string (this):
 		return (
@@ -543,6 +568,7 @@ class EnumTypeEntry:
 		this.token = token
 		this.name = name
 		this.tag = tag
+		this.parent = None
 
 	def get_token (this) -> TokenLocation:
 		return this.token
@@ -552,6 +578,12 @@ class EnumTypeEntry:
 
 	def get_tag (this) -> str:
 		return this.tag
+
+	def get_parent (this) -> UserDefinedType:
+		return this.parent
+
+	def set_parent (this, parent: UserDefinedType):
+		this.parent = parent
 
 	def to_string (this):
 		return (
@@ -587,6 +619,7 @@ class EnumType (UserDefinedType):
 		this.entry_from_name = dict()
 
 		for entry in entries:
+			entry.set_parent(this)
 			this.entry_from_name[entry.get_name()] = entry
 			this.entry_from_tag[entry.get_tag()] = entry
 
@@ -789,6 +822,7 @@ class DragomanLexer (Lexer):
 
 		ARRAY_KW,
 		CASE_KW,
+		CONST_KW,
 		DICT_KW,
 		ENTRY_KW,
 		ENUM_KW,
@@ -812,6 +846,7 @@ class DragomanLexer (Lexer):
 
 	ARRAY_KW = r'(?i:\(ARRAY)'
 	CASE_KW = r'(?i:\(CASE)'
+	CONST_KW = r'(?i:\(CONST)(?i:ANT)?'
 	DICT_KW = r'(?i:\(DICT)'
 	ENTRY_KW = r'(?i:\(ENTRY)'
 	ENUM_KW = r'(?i:\(ENUM)(?i:ERATE)?'
@@ -1301,6 +1336,19 @@ class DragomanParser (Parser):
 
 		return DictOfDefinedType(t.ID, field_type, t.get_type)
 
+	#### MAYBE CONSTANT #########################################################
+	@_(r'')
+	def maybe_const (this, t):
+		DragomanParser.LAST_TOKEN = t
+
+		return None
+
+	@_(r'CONST_KW ID EOP')
+	def maybe_const (this, t):
+		DragomanParser.LAST_TOKEN = t
+
+		return t.ID
+
 	#### OBJECT #################################################################
 	@_(r'')
 	def object_definition (this, t):
@@ -1308,7 +1356,7 @@ class DragomanParser (Parser):
 
 		return (set(), set(), list(), set())
 
-	@_(r'ENTRY_KW ID ID get_type EOP object_definition')
+	@_(r'ENTRY_KW ID ID get_type maybe_const EOP object_definition')
 	def object_definition (this, t):
 		DragomanParser.LAST_TOKEN = t
 
@@ -1319,6 +1367,7 @@ class DragomanParser (Parser):
 			t.ID0,
 			t.ID1,
 			t.get_type,
+			t.maybe_const
 		)
 
 		if (result.get_name() in names):
@@ -1341,7 +1390,7 @@ class DragomanParser (Parser):
 
 		return (names, tags, entries, markers)
 
-	@_(r'ENTRY_KW ID get_type EOP object_definition')
+	@_(r'ENTRY_KW ID get_type maybe_const EOP object_definition')
 	def object_definition (this, t):
 		DragomanParser.LAST_TOKEN = t
 
@@ -1352,6 +1401,7 @@ class DragomanParser (Parser):
 			t.ID,
 			"f" + str(len(tags)),
 			t.get_type,
+			t.maybe_const
 		)
 
 		if (result.get_name() in names):
