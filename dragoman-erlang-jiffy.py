@@ -577,7 +577,7 @@ class ObjectTypeConverter:
 		cw: dragoman.CodeWriter,
 		object_type: dragoman.ObjectType
 	):
-		cw.line("-spec json_import (dict:dict()) -> type().")
+		cw.line("-spec json_import (#{ binary() => any() }) -> type().")
 		cw.line("json_import (D) ->")
 		cw.increase_indent()
 		cw.line(NameConverter.type_to_record_reference(object_type))
@@ -585,16 +585,13 @@ class ObjectTypeConverter:
 		cw.increase_indent()
 
 		for e in object_type.get_entries():
-			if (e.maybe_get_const_value() != None):
-				continue
-
 			et = e.get_type()
 
 			cw.start_line(NameConverter.object_entry_to_record_member(e))
 			cw.append(" = ")
 
 			value_access = (
-				"dict:get("
+				"maps:get("
 				+ NameConverter.object_entry_to_tag(e)
 				+ ", D)"
 			)
@@ -608,7 +605,7 @@ class ObjectTypeConverter:
 				cw.append(value_access)
 			elif (depth == 0):
 				if (isinstance(leaf_type, dragoman.DictOfDefinedType)):
-					cw.append("lists:fold(fun (X, Map) -> E = ")
+					cw.append("lists:foldl(fun (X, Map) -> E = ")
 					cw.append(
 						NameConverter.type_to_module_name(leaf_type.get_parent())
 					)
@@ -631,7 +628,7 @@ class ObjectTypeConverter:
 			elif (depth == 1):
 				if (isinstance(leaf_type, dragoman.DictOfDefinedType)):
 					cw.append("lists:map(fun (Y) -> ")
-					cw.append("lists:fold(fun (X, Map) -> E = ")
+					cw.append("lists:foldl(fun (X, Map) -> E = ")
 					cw.append(
 						NameConverter.type_to_module_name(leaf_type.get_parent())
 					)
@@ -660,7 +657,7 @@ class ObjectTypeConverter:
 				cw.append(", fun ")
 				if (isinstance(leaf_type, dragoman.DictOfDefinedType)):
 					cw.append("(Y) -> ")
-					cw.append("lists:fold(fun (X, Map) -> E = ")
+					cw.append("lists:foldl(fun (X, Map) -> E = ")
 					cw.append(
 						NameConverter.type_to_module_name(leaf_type.get_parent())
 					)
@@ -966,6 +963,7 @@ class PolymorphTypeConverter:
 			cw.line("(")
 			cw.increase_indent()
 
+			# FIXME: does not handle const_value, so it's disabled for now.
 			for build_param in pcase.get_type().get_entries():
 				if (build_param.get_name() == polymorph_type.get_key_field_name()):
 					cw.start_line(
@@ -1002,19 +1000,20 @@ class PolymorphTypeConverter:
 		cw.increase_indent()
 
 		cw.line("json_export/1,")
-		cw.line("json_import/1,")
+		cw.line("json_import/1")
 
-		for pcase in polymorph_type.get_cases():
-			name = NameConverter.polymorph_case_to_atom(pcase)
+		# FIXME: does not handle const_value, so it's disabled for now.
+#		for pcase in polymorph_type.get_cases():
+#			name = NameConverter.polymorph_case_to_atom(pcase)
+#
+#			cw.start_line(name)
+#			cw.append("/")
+#			cw.append(str(len(pcase.get_type().get_entries()) - 1))
+#			cw.set_buffer(",")
+#			cw.mark_buffer_as_ending_line()
 
-			cw.start_line(name)
-			cw.append("/")
-			cw.append(str(len(pcase.get_type().get_entries()) - 1))
-			cw.set_buffer(",")
-			cw.mark_buffer_as_ending_line()
-
-		cw.discard_buffer()
-		cw.newline()
+#		cw.discard_buffer()
+#		cw.newline()
 		cw.decrease_indent()
 		cw.line("]")
 		cw.decrease_indent()
@@ -1033,7 +1032,8 @@ class PolymorphTypeConverter:
 			cw.start_line("json_export (E) when is_record(E, ")
 			cw.append(NameConverter.type_to_record_name(pcase.get_type()))
 			cw.append(", ")
-			cw.append(str(len(pcase.get_type().get_entries())))
+			# Must count record name as part of the tuple
+			cw.append(str(len(pcase.get_type().get_entries()) + 1))
 			cw.append(") -> ")
 			cw.append(NameConverter.type_to_module_name(pcase.get_type()))
 			cw.append(":json_export(E)")
@@ -1049,10 +1049,10 @@ class PolymorphTypeConverter:
 		cw: dragoman.CodeWriter,
 		polymorph_type: dragoman.PolymorphType
 	):
-		cw.line("-spec json_import (dict:dict()) -> type().")
+		cw.line("-spec json_import (#{ binary => any() }) -> type().")
 		cw.line("json_import (D) ->")
 		cw.increase_indent()
-		cw.start_line("V = dict:get(<<\"")
+		cw.start_line("V = maps:get(<<\"")
 		cw.append(polymorph_type.get_key_field_tag())
 		cw.append("\">>, D),")
 		cw.newline()
@@ -1095,7 +1095,7 @@ class PolymorphTypeConverter:
 		PolymorphTypeConverter.add_json_export_function(code_writer, e)
 		PolymorphTypeConverter.add_json_import_function(code_writer, e)
 
-		PolymorphTypeConverter.add_builds(code_writer, e)
+		#PolymorphTypeConverter.add_builds(code_writer, e)
 
 		code_writer.finalize()
 
