@@ -15,9 +15,10 @@ class NameConverter:
 		result = NameConverter.MODULE_NAMES.get(t)
 
 		if result is None:
-			split_name = dragoman.NameSplitter.split(t.get_name())
-
-			result = "dgn_" + ("_".join(split_name))
+			result = (
+				"dgn_"
+				+ dragoman.NameSplitter.full_lower_long_dash(t.get_name())
+			)
 			NameConverter.MODULE_NAMES[t] = result
 
 		return result
@@ -26,9 +27,7 @@ class NameConverter:
 		result = NameConverter.RECORD_NAMES.get(t)
 
 		if result is None:
-			split_name = dragoman.NameSplitter.split(t.get_name())
-
-			result = "_".join(split_name)
+			result = dragoman.NameSplitter.full_lower_long_dash(t.get_name())
 			NameConverter.RECORD_NAMES[t] = result
 
 		return result
@@ -37,9 +36,7 @@ class NameConverter:
 		result = NameConverter.VARIABLE_NAMES.get(o)
 
 		if result is None:
-			split_name = dragoman.NameSplitter.split(o.get_name())
-
-			result = "".join([(a[0].upper() + a[1:]) for a in split_name])
+			result = dragoman.NameSplitter.upper_first_letter(o.get_name())
 			NameConverter.VARIABLE_NAMES[o] = result
 
 		return result
@@ -48,9 +45,7 @@ class NameConverter:
 		result = NameConverter.RECORD_MEMBER_NAMES.get(o)
 
 		if result is None:
-			split_name = dragoman.NameSplitter.split(o.get_name())
-
-			result = "_".join(split_name)
+			result = dragoman.NameSplitter.full_lower_long_dash(o.get_name())
 			NameConverter.RECORD_MEMBER_NAMES[o] = result
 
 		return result
@@ -62,9 +57,7 @@ class NameConverter:
 		result = NameConverter.ATOM_NAMES.get(o)
 
 		if result is None:
-			split_name = dragoman.NameSplitter.split(o.get_name())
-
-			result = "_".join(split_name)
+			result = dragoman.NameSplitter.full_lower_long_dash(o.get_name())
 			NameConverter.RECORD_MEMBER_NAMES[o] = result
 
 		return result
@@ -84,9 +77,7 @@ class NameConverter:
 		result = NameConverter.ATOM_NAMES.get(o)
 
 		if result is None:
-			split_name = dragoman.NameSplitter.split(o.get_name())
-
-			result = "_".join(split_name)
+			result = dragoman.NameSplitter.upper_first_letter(o.get_name())
 			NameConverter.RECORD_MEMBER_NAMES[o] = result
 
 		return result
@@ -103,7 +94,7 @@ class NameConverter:
 		elif isinstance(t, dragoman.DictOfDefinedType):
 			return (
 				"#{"
-				+ NameConverter.type_to_type_reference(t.get_field_type())
+				+ NameConverter.type_to_type_reference(t.get_key_type())
 				+ " => "
 				+ NameConverter.type_to_type_reference(t.get_parent())
 				+ "}"
@@ -610,12 +601,18 @@ class ObjectTypeConverter:
 						NameConverter.type_to_module_name(leaf_type.get_parent())
 					)
 					cw.append(":json_import(X), maps:put(")
-					cw.append(
-						NameConverter.type_to_module_name(leaf_type.get_parent())
-					)
-					cw.append(":get_")
-					cw.append(leaf_type.get_field_name())
-					cw.append("(E), E, Map) end, maps:new(), ")
+					access = "E"
+					for (access_name, access_type) in leaf_type.get_accesses():
+						access = (
+							NameConverter.type_to_module_name(access_type)
+							+ ":get_"
+							+ access_name
+							+ "("
+							+ access
+							+ ")"
+						)
+					cw.append(access)
+					cw.append(", E, Map) end, maps:new(), ")
 					cw.append(value_access)
 					cw.append(")")
 				elif (isinstance(leaf_type, dragoman.UserDefinedType)):
@@ -662,12 +659,18 @@ class ObjectTypeConverter:
 						NameConverter.type_to_module_name(leaf_type.get_parent())
 					)
 					cw.append(":json_import(X), maps:put(")
-					cw.append(
-						NameConverter.type_to_module_name(leaf_type.get_parent())
-					)
-					cw.append(":get_")
-					cw.append(leaf_type.get_field_name())
-					cw.append("(E), E, Map) end, maps:new(), Y) end)")
+					access = "E"
+					for (access_name, access_type) in leaf_type.get_accesses():
+						access = (
+							NameConverter.type_to_module_name(access_type)
+							+ ":get_"
+							+ access_name
+							+ "("
+							+ access
+							+ ")"
+						)
+					cw.append(access)
+					cw.append(", E, Map) end, maps:new(), Y) end)")
 				elif (isinstance(leaf_type, dragoman.UserDefinedType)):
 					cw.append(NameConverter.type_to_module_name(leaf_type))
 					cw.append(":json_import/1)")

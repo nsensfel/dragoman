@@ -4,6 +4,7 @@ from sly import Lexer, Parser
 
 import sys
 import argparse
+import re
 
 from pathlib import Path
 
@@ -347,34 +348,32 @@ class ArrayOfDefinedType (DefinedType):
 class DictOfDefinedType (DefinedType):
 	def __init__ (
 		this,
-		field_name: str,
-		field_type: DefinedType,
+		accesses: list[(str, DefinedType)],
+		key_type : DefinedType,
 		parent: DefinedType
 	):
 		DefinedType.__init__(
 			this,
 			(
 				"(Dict "
-				+ field_name
-				+ ": "
-				+ field_type.get_name()
+				+ ".".join(["(" + n + ":" + t.get_name() + ")" for (n, t) in accesses])
 				+ " -> "
 				+ parent.get_name()
 				+ ")"
 			)
 		)
 		this.parent = parent
-		this.field_name = field_name
-		this.field_type = field_type
+		this.accesses = accesses
+		this.key_type = key_type
 
 	def get_parent (this) -> DefinedType:
 		return this.parent
 
-	def get_field_name (this) -> str:
-		return this.field_name
+	def get_accesses (this) -> list[(str, DefinedType)]:
+		return this.accesses
 
-	def get_field_type (this) -> DefinedType:
-		return this.field_type
+	def get_key_type (this) -> DefinedType:
+		return this.key_type
 
 class UserDefinedType (DefinedType):
 	COLLECTION = dict()
@@ -518,9 +517,9 @@ class ObjectType (UserDefinedType):
 				or isinstance(dependency, DictOfDefinedType)
 			):
 				if (isinstance(dependency, DictOfDefinedType)):
-					field_type = dependency.get_field_type()
-					if (isinstance(field_type, UserDefinedType)):
-						this.dependencies.add(field_type)
+					for (access_name, field_type) in dependency.get_accesses():
+						if (isinstance(field_type, UserDefinedType)):
+							this.dependencies.add(field_type)
 				dependency = dependency.get_parent()
 
 			if (isinstance(dependency, UserDefinedType)):
@@ -732,9 +731,9 @@ class PolymorphType (UserDefinedType):
 				or isinstance(dependency, DictOfDefinedType)
 			):
 				if (isinstance(dependency, DictOfDefinedType)):
-					field_type = dependency.get_field_type()
-					if (isinstance(field_type, UserDefinedType)):
-						this.dependencies.add(field_type)
+					for (access_name, field_type) in dependency.get_accesses():
+						if (isinstance(field_type, UserDefinedType)):
+							this.dependencies.add(field_type)
 				dependency = dependency.get_parent()
 
 			if (isinstance(dependency, UserDefinedType)):
@@ -789,31 +788,35 @@ class PolymorphType (UserDefinedType):
 		return result
 
 class NameSplitter:
-	def split (s: str):
-		result = []
-		next_word = ""
+	def split (name: str):
+		return name.split("_")
 
-		for c in s:
-			if c.isalnum():
-				if c.isupper():
-					c = c.lower()
+	def upper_first_letter (name: str):
+		as_list = NameSplitter.split(name)
+		result = ""
 
-					if (len(next_word) > 0):
-						result.append(next_word)
-						next_word = ""
-					next_word += str(c)
-				else:
-					next_word += c
-					continue
-			else:
-				if (len(next_word) > 0):
-					result.append(next_word)
-					next_word = ""
+		for entry in as_list:
+			result += entry[0].upper()
 
-		if (len(next_word) > 0):
-			result.append(next_word)
+			if (len(entry) > 0):
+				result += entry[1:]
 
 		return result
+
+	def full_upper_long_dash (name: str):
+		return name.upper()
+
+	def full_lower_long_dash (name: str):
+		return name
+
+	def lower_first_letter_then_upper_first_letters (name: str):
+		if (len(name) == 1):
+			return name[0].lower()
+
+		result = NameSplitter.upper_first_letter(name)
+
+		return result[0].lower() + result[1:]
+
 
 class DragomanLexer (Lexer):
 	tokens = {
@@ -842,7 +845,7 @@ class DragomanLexer (Lexer):
 	#	t.value = int(t.value)
 	#	return t
 
-	ID = r'\+|\-|([\&a-zA-Z_,.%/#\':][\&a-zA-Z_0-9,.\-%#/\+\':]*)'
+	ID = r'\+|\-|([\&a-zA-Z_0-9,.\-%#/\+\':]+)'
 
 	ARRAY_KW = r'(?i:\(ARRAY)'
 	CASE_KW = r'(?i:\(CASE)'
@@ -883,6 +886,7 @@ class DragomanParser (Parser):
 	LAST_TOKEN = None
 	PARSED_FILES = set()
 	INCLUDE_DIRECTORIES = set()
+	BASIC_NAME_REGEX = r'([a-zA-Z_][a-zA-Z_0-9]*)'
 
 	tokens = DragomanLexer.tokens
 
@@ -990,13 +994,13 @@ class DragomanParser (Parser):
 
 		return t
 
-	@_(r'ENUM_KW ID get_type enum_definition EOP')
+	@_(r'ENUM_KW basic_name get_type enum_definition EOP')
 	def file_entry (this, t):
 		DragomanParser.LAST_TOKEN = t
 
 		(tags, names, entries, markers) = t.enum_definition
 
-		result = EnumType(TokenLocation(t), t.ID, t.get_type, entries)
+		result = EnumType(TokenLocation(t), t.basic_name, t.get_type, entries)
 
 		for m in markers:
 			result.add_marker(m)
@@ -1005,13 +1009,13 @@ class DragomanParser (Parser):
 
 		return t
 
-	@_(r'OBJECT_KW ID object_definition EOP')
+	@_(r'OBJECT_KW basic_name object_definition EOP')
 	def file_entry (this, t):
 		DragomanParser.LAST_TOKEN = t
 
 		(tags, names, entries, markers) = t.object_definition
 
-		result = ObjectType(TokenLocation(t), t.ID, entries)
+		result = ObjectType(TokenLocation(t), t.basic_name, entries)
 
 		for m in markers:
 			result.add_marker(m)
@@ -1020,7 +1024,7 @@ class DragomanParser (Parser):
 
 		return t
 
-	@_(r'POLYMORPH_KW ID ID polymorph_definition EOP')
+	@_(r'POLYMORPH_KW basic_name basic_name polymorph_definition EOP')
 	def file_entry (this, t):
 		DragomanParser.LAST_TOKEN = t
 
@@ -1043,7 +1047,7 @@ class DragomanParser (Parser):
 			if (isinstance(pcase_type, ObjectType)):
 				# TODO: TypoFixer use for these...
 				try:
-					entry = pcase_type.get_entry_from_name(t.ID1)
+					entry = pcase_type.get_entry_from_name(t.basic_name1)
 					entry_type = entry.get_type()
 				except Exception:
 					DragomanParser.print_error(
@@ -1051,7 +1055,7 @@ class DragomanParser (Parser):
 							"Type '"
 							+ pcase_type.get_name()
 							+ "' does not have entry '"
-							+ t.ID1
+							+ t.basic_name1
 							+ "'."
 						),
 						pcase.get_token()
@@ -1066,7 +1070,7 @@ class DragomanParser (Parser):
 							"Type "
 							+ entry_type.get_name()
 							+ " does not use the same tag for "
-							+ t.ID1
+							+ t.basic_name1
 							+ " as previous entries."
 						),
 						pcase.get_token()
@@ -1075,21 +1079,21 @@ class DragomanParser (Parser):
 			elif (isinstance(entry, PolymorphType)):
 				# TODO: TypoFixer use for these...
 				try:
-					entry_type = entry.get_shared_field(t.ID1)
+					entry_type = entry.get_shared_field(t.basic_name1)
 				except Exception:
 					DragomanParser.print_error(
 						(
 							"Type '"
 							+ entry.get_name()
 							+ "' does not have entry '"
-							+ t.ID1
+							+ t.basic_name1
 							+ "' as shared."
 						),
 						pcase.get_token()
 					)
 					raise Exception
 
-				candidate_field_tag = entry.get_shared_field_tag(t.ID1)
+				candidate_field_tag = entry.get_shared_field_tag(t.basic_name1)
 
 				if (key_field_tag == None):
 					key_field_tag = candidate_field_tag
@@ -1097,7 +1101,7 @@ class DragomanParser (Parser):
 					DragomanParser.print_error(
 						(
 							"Entry '"
-							+ t.ID1
+							+ t.basic_name1
 							+ "' of target type does not use the same tag for "
 							+ entry.get_name()
 							+ " as previous entries."
@@ -1121,7 +1125,7 @@ class DragomanParser (Parser):
 						"Type "
 						+ entry_type.get_name()
 						+ " does not use the same tag for "
-						+ t.ID1
+						+ t.basic_name1
 						+ " as previous entries."
 					),
 					pcase.get_token()
@@ -1164,9 +1168,10 @@ class DragomanParser (Parser):
 						)
 						raise Exception
 				elif (isinstance(entry, PolymorphType)):
+					name = t.basic_name1
 					try:
-						shared_field_type = entry_type.get_shared_field(t.ID1)
-						shared_field_tag = entry_type.get_shared_field_tag(t.ID1)
+						shared_field_type = entry_type.get_shared_field(name)
+						shared_field_tag = entry_type.get_shared_field_tag(name)
 					except Exception:
 						DragomanParser.print_error(
 							(
@@ -1198,7 +1203,7 @@ class DragomanParser (Parser):
 					DragomanParser.print_error(
 						(
 							"Entry '"
-							+ t.ID1
+							+ t.basic_name1
 							+ "' of target type does not use the same type for shared"
 							+ " field '"
 							+ s
@@ -1214,7 +1219,7 @@ class DragomanParser (Parser):
 					DragomanParser.print_error(
 						(
 							"Entry '"
-							+ t.ID1
+							+ t.basic_name1
 							+ "' of target tag does not use the same tag for shared"
 							+ " field '"
 							+ s
@@ -1234,8 +1239,8 @@ class DragomanParser (Parser):
 
 		result = PolymorphType(
 			TokenLocation(t),
-			t.ID0,
-			t.ID1,
+			t.basic_name0,
+			t.basic_name1,
 			key_field_tag,
 			enum_type,
 			cases,
@@ -1252,24 +1257,29 @@ class DragomanParser (Parser):
 		return t
 
 	#### GET DEFINED OBJECT #####################################################
-	@_(r'ID')
+	@_(r'basic_name')
 	def get_type (this, t):
 		DragomanParser.LAST_TOKEN = t
 
 		try:
-			return DefinedType.get(t.ID)
+			return DefinedType.get(t.basic_name)
 		except Exception as e:
 			fixed_id = TypoFixer.propose_fix(
 				t,
 				"Type",
-				t.ID,
+				t.basic_name,
 				[i.get_name() for i in DefinedType.get_all()]
 			)
 
 			if (fixed_id is None):
 				raise e
 			else:
-				TypoFixer.apply_fix(DragomanParser.CURRENT_FILE, t, t.ID, fixed_id)
+				TypoFixer.apply_fix(
+					DragomanParser.CURRENT_FILE,
+					t,
+					t.basic_name,
+					fixed_id
+				)
 
 				return DefinedType.get(fixed_id)
 		except Exception as e:
@@ -1281,60 +1291,64 @@ class DragomanParser (Parser):
 
 		return ArrayOfDefinedType(t.get_type)
 
-	@_(r'DICT_KW ID get_type EOP')
+	@_(r'DICT_KW composed_variable_name get_type EOP')
 	def get_type (this, t):
 		DragomanParser.LAST_TOKEN = t
 
-		value_type = t.get_type
+		next_type = t.get_type
+		accesses = []
 
-		if (isinstance(value_type, ObjectType)):
-			try:
-				field = value_type.get_entry_from_name(t.ID)
-				field_type = field.get_type()
-			except Exception as e:
-				# TODO: TypoFixer
-				DragomanParser.print_error(
-					(
-						"There is no '"
-						+ t.ID
-						+ "' entry in type '"
-						+ value_type.get_name()
-						+ "'"
-					),
-					t.DICT_KW
-				)
-				raise Exception
-		elif (isinstance(value_type, PolymorphType)):
+		for access in t.composed_variable_name:
+			accesses.append((access, next_type))
+			if (isinstance(next_type, ObjectType)):
 				try:
-					field_type = value_type.get_shared_field(t.ID)
+					field = next_type.get_entry_from_name(access)
+					next_type = field.get_type()
 				except Exception as e:
 					# TODO: TypoFixer
 					DragomanParser.print_error(
 						(
 							"There is no '"
-							+ t.ID
-							+ "' shared field in type '"
-							+ value_type.get_name()
+							+ access
+							+ "' entry in type '"
+							+ next_type.get_name()
 							+ "'"
 						),
-						t.DICT_KW
+						t
 					)
 					raise Exception
+			elif (isinstance(next_type, PolymorphType)):
+				try:
+					next_type = next_type.get_shared_field(access)
+				except Exception as e:
+					# TODO: TypoFixer
+					DragomanParser.print_error(
+						(
+							"There is no '"
+							+ access
+							+ "' shared field in type '"
+							+ next_type.get_name()
+							+ "'"
+						),
+						t
+					)
+					raise Exception
+
 		if (
-			isinstance(field_type, UserDefinedType)
-			and not isinstance(field_type, EnumType)
+			isinstance(next_type, UserDefinedType)
+			and not isinstance(next_type, EnumType)
 		):
 			DragomanParser.print_error(
 				(
 					"Dictionaries cannot use type '"
-					+ field_type.get_name()
+					+ next_type.get_name()
 					+ "' for keys."
 				),
-				t.DICT_KW
+				t
 			)
 			raise Exception
 
-		return DictOfDefinedType(t.ID, field_type, t.get_type)
+		return DictOfDefinedType(accesses, next_type, t.get_type)
 
 	#### MAYBE CONSTANT #########################################################
 	@_(r'')
@@ -1356,7 +1370,7 @@ class DragomanParser (Parser):
 
 		return (set(), set(), list(), set())
 
-	@_(r'ENTRY_KW ID ID get_type maybe_const EOP object_definition')
+	@_(r'ENTRY_KW basic_name ID get_type maybe_const EOP object_definition')
 	def object_definition (this, t):
 		DragomanParser.LAST_TOKEN = t
 
@@ -1364,8 +1378,8 @@ class DragomanParser (Parser):
 
 		result = ObjectTypeEntry(
 			TokenLocation(t),
-			t.ID0,
-			t.ID1,
+			t.basic_name,
+			t.ID,
 			t.get_type,
 			t.maybe_const
 		)
@@ -1373,16 +1387,32 @@ class DragomanParser (Parser):
 		if (result.get_name() in names):
 			DragomanParser.print_error(
 				"Duplicate name '" + result.get_name() + "'",
-				t.ENTRY_KW
+				t
 			)
 			raise Exception
 
 		if (result.get_tag() in tags):
 			DragomanParser.print_error(
 				"Duplicate tag '" + result.get_tag() + "'",
-				t.ENTRY_KW
+				t
 			)
 			raise Exception
+
+		if ((t.maybe_const is not None) and isinstance(t.get_type, EnumType)):
+			try:
+				t.get_type.get_entry_from_name(t.maybe_const)
+			except Exception as e:
+				DragomanParser.print_error(
+					(
+						"Unknown entry '"
+						+ t.maybe_const
+						+ "' in "
+						+ t.get_type.get_name()
+						+ "."
+					),
+					t
+				)
+				raise e
 
 		names.add(result.get_name())
 		tags.add(result.get_tag())
@@ -1390,7 +1420,7 @@ class DragomanParser (Parser):
 
 		return (names, tags, entries, markers)
 
-	@_(r'ENTRY_KW ID get_type maybe_const EOP object_definition')
+	@_(r'ENTRY_KW basic_name get_type maybe_const EOP object_definition')
 	def object_definition (this, t):
 		DragomanParser.LAST_TOKEN = t
 
@@ -1398,7 +1428,7 @@ class DragomanParser (Parser):
 
 		result = ObjectTypeEntry(
 			TokenLocation(t),
-			t.ID,
+			t.basic_name,
 			"f" + str(len(tags)),
 			t.get_type,
 			t.maybe_const
@@ -1446,13 +1476,13 @@ class DragomanParser (Parser):
 
 		return (set(), set(), list(), set())
 
-	@_(r'ENTRY_KW ID ID EOP enum_definition')
+	@_(r'ENTRY_KW basic_name ID EOP enum_definition')
 	def enum_definition (this, t):
 		DragomanParser.LAST_TOKEN = t
 
 		(names, tags, entries, markers) = t.enum_definition
 
-		result = EnumTypeEntry(TokenLocation(t), t.ID0, t.ID1)
+		result = EnumTypeEntry(TokenLocation(t), t.basic_name, t.ID)
 
 		if (result.get_name() in names):
 			DragomanParser.print_error(
@@ -1492,13 +1522,13 @@ class DragomanParser (Parser):
 
 		return (dict(), set(), set())
 
-	@_(r'CASE_KW ID get_type EOP polymorph_definition')
+	@_(r'CASE_KW basic_name get_type EOP polymorph_definition')
 	def polymorph_definition (this, t):
 		DragomanParser.LAST_TOKEN = t
 
 		(cases, shared, markers) = t.polymorph_definition
 
-		result = PolymorphTypeCase(TokenLocation(t), t.ID, t.get_type)
+		result = PolymorphTypeCase(TokenLocation(t), t.basic_name, t.get_type)
 
 		if (result.get_name() in cases):
 			DragomanParser.print_error(
@@ -1534,15 +1564,57 @@ class DragomanParser (Parser):
 		return (cases, shared, markers)
 
 	#### ID SET #################################################################
+	@_(r'ID')
+	def basic_name (this, t):
+		DragomanParser.LAST_TOKEN = t
+		if (not re.match(DragomanParser.BASIC_NAME_REGEX, t.ID)):
+			DragomanParser.print_error(
+				(
+					"Invalid basic name '"
+					+ t.ID
+					+ "'. Allowed syntax is '"
+					+ DragomanParser.BASIC_NAME_REGEX
+					+ "'."
+				),
+				t.ID
+			)
+			raise Exception
+
+		return t.ID.lower()
+
+	@_(r'ID')
+	def composed_variable_name (this, t):
+		DragomanParser.LAST_TOKEN = t
+		result = t.ID.split('.')
+		for access in result:
+			if (not re.match(DragomanParser.BASIC_NAME_REGEX, access)):
+				DragomanParser.print_error(
+					(
+						"Invalid basic name '"
+						+ access
+						+ "' in '"
+						+ t.ID
+						+ "'. Allowed syntax is '"
+						+ DragomanParser.BASIC_NAME_REGEX
+						+ "'."
+					),
+					t.ID
+				)
+				raise Exception
+		return result
+
+	#### ID SET #################################################################
 	@_(r'')
 	def id_set (this, t):
+		DragomanParser.LAST_TOKEN = t
 		return set()
 
-	@_(r'ID id_set')
+	@_(r'basic_name id_set')
 	def id_set (this, t):
+		DragomanParser.LAST_TOKEN = t
 		prev = t.id_set
 
-		prev.add(ID)
+		prev.add(t.basic_name)
 
 		return prev
 

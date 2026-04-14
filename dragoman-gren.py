@@ -15,27 +15,22 @@ class NameConverter:
 		result = NameConverter.MODULE_NAMES.get(t)
 
 		if result is None:
-			split_name = dragoman.NameSplitter.split(t.get_name())
-
-			result = "Dragoman." + ("".join([n[0].upper() + n[1:] for n in split_name]))
+			result = (
+				"Dragoman."
+				+ dragoman.NameSplitter.upper_first_letter(t.get_name())
+			)
 			NameConverter.MODULE_NAMES[t] = result
 
 		return result
 
 	def type_to_filename (t: dragoman.DefinedType) -> str:
-		split_name = dragoman.NameSplitter.split(t.get_name())
-
-		result = "".join([n[0].upper() + n[1:] for n in split_name])
-
-		return result + ".gren"
+		return dragoman.NameSplitter.upper_first_letter(t.get_name()) + ".gren"
 
 	def object_entry_to_variable (o: dragoman.ObjectTypeEntry) -> str:
 		result = NameConverter.VARIABLE_NAMES.get(o)
 
 		if result is None:
-			split_name = dragoman.NameSplitter.split(o.get_name())
-
-			result = "_".join(split_name)
+			result = dragoman.NameSplitter.full_lower_long_dash(o.get_name())
 			NameConverter.VARIABLE_NAMES[o] = result
 
 		return result
@@ -44,9 +39,7 @@ class NameConverter:
 		result = NameConverter.RECORD_MEMBER_NAMES.get(o)
 
 		if result is None:
-			split_name = dragoman.NameSplitter.split(o.get_name())
-
-			result = "_".join(split_name)
+			result = dragoman.NameSplitter.full_lower_long_dash(o.get_name())
 			NameConverter.RECORD_MEMBER_NAMES[o] = result
 
 		return result
@@ -55,7 +48,7 @@ class NameConverter:
 		return "\"" + o.get_tag() + "\""
 
 	def enum_entry_to_atom (o: dragoman.EnumTypeEntry) -> str:
-		return o.get_name()
+		return dragoman.NameSplitter.upper_first_letter(o.get_name())
 
 	def enum_entry_to_value (o: dragoman.EnumTypeEntry) -> str:
 		# TODO: support for integer values
@@ -69,7 +62,7 @@ class NameConverter:
 		)
 
 	def polymorph_case_to_atom (o: dragoman.PolymorphTypeCase) -> str:
-		return o.get_name()
+		return dragoman.NameSplitter.upper_first_letter(o.get_name())
 
 	def type_to_type_reference (t: dragoman.DefinedType) -> str:
 		if isinstance(t, dragoman.ArrayOfDefinedType):
@@ -81,7 +74,7 @@ class NameConverter:
 		elif isinstance(t, dragoman.DictOfDefinedType):
 			return (
 				"(Dict.Dict "
-				+ NameConverter.type_to_type_reference(t.get_field_type())
+				+ NameConverter.type_to_type_reference(t.get_key_type())
 				+ " "
 				+ NameConverter.type_to_type_reference(t.get_parent())
 				+ ")"
@@ -89,18 +82,18 @@ class NameConverter:
 		elif isinstance(t, dragoman.UserDefinedType):
 			return NameConverter.type_to_module_name(t) + ".Type"
 		else:
-			name = t.get_name().lower()
+			name = dragoman.NameSplitter.upper_first_letter(t.get_name())
 
-			if (name == "string"):
+			if (name == "String"):
 				return "String"
-			elif (name == "integer"):
+			elif (name == "Integer"):
 				return "Int"
-			elif (name == "boolean"):
+			elif (name == "Boolean"):
 				return "Bool"
-			elif (name == "float"):
+			elif (name == "Float"):
 				return "Float"
 			else:
-				return name[0].upper() + name[1:]
+				return name
 
 class ObjectTypeConverter:
 	def add_type (
@@ -397,13 +390,27 @@ class ObjectTypeConverter:
 			)
 		elif (isinstance(defined_type, dragoman.DictOfDefinedType)):
 			parent_type = defined_type.get_parent()
-			return (
+			result = (
 				"(Json.Decode.map "
-				+ "(Array.foldl (\\ el acc -> (Dict.set ("
-				+ NameConverter.type_to_module_name(parent_type)
-				+ ".get_"
-				+ defined_type.get_field_name()
-				+ " el) el acc)) (Dict.empty)) (Json.Decode.array "
+				+ "(Array.foldl (\\ el acc -> (Dict.set "
+			)
+			access = "el"
+
+			for (access_name, access_type) in defined_type.get_accesses():
+				access = (
+					"("
+					+ NameConverter.type_to_module_name(access_type)
+					+ ".get_"
+					+ access_name
+					+ " "
+					+ access
+					+ ")"
+				)
+
+			return (
+				result
+				 + access
+				+ " el acc)) (Dict.empty)) (Json.Decode.array "
 				+ ObjectTypeConverter.get_decoder_for(defined_type.get_parent())
 				+ "))"
 			)
