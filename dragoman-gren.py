@@ -71,6 +71,12 @@ class NameConverter:
 				+ NameConverter.type_to_type_reference(t.get_parent())
 				+ ")"
 			)
+		elif isinstance(t, dragoman.SetOfDefinedType):
+			return (
+				"(Set.Set "
+				+ NameConverter.type_to_type_reference(t.get_parent())
+				+ ")"
+			)
 		elif isinstance(t, dragoman.DictOfDefinedType):
 			return (
 				"(Dict.Dict "
@@ -305,6 +311,25 @@ class ObjectTypeConverter:
 					cw.append(NameConverter.type_to_module_name(leaf_type))
 					cw.append(".encode)")
 					cw.newline()
+				elif (isinstance(leaf_type, dragoman.SetOfDefinedType)):
+					cw.start_line("(Json.Encode.set ")
+
+					parent_type = leaf_type.get_parent()
+					parent_type_name = parent_type.get_name()
+
+					if (parent_type_name == "integer"):
+						cw.append("(Json.Encode.int)")
+					elif (parent_type_name == "string"):
+						cw.append("(Json.Encode.string)")
+					elif (parent_type_name == "float"):
+						cw.append("(Json.Encode.float)")
+					elif (parent_type_name == "boolean"):
+						cw.append("(Json.Encode.bool)")
+					else:
+						cw.append("(ENCODE_BASIC " + parent_type_name + ")")
+
+					cw.append(")")
+					cw.newline()
 				elif (isinstance(leaf_type, dragoman.DictOfDefinedType)):
 					cw.start_line("(\\ d -> (Json.Encode.array ")
 					cw.append(
@@ -327,7 +352,7 @@ class ObjectTypeConverter:
 						cw.line("(ENCODE_BASIC " + type_name + ")")
 
 				for i in range(0, depth):
-					cw.line("|> Json.Encode.array ")
+					cw.line("|> Json.Encode.array")
 				cw.decrease_indent()
 				cw.line(")")
 				cw.line(value_access)
@@ -337,6 +362,27 @@ class ObjectTypeConverter:
 				cw.append("(")
 				cw.append(NameConverter.type_to_module_name(et))
 				cw.append(".encode ")
+				cw.append(value_access)
+				cw.append(")")
+			elif (isinstance(et, dragoman.SetOfDefinedType)):
+				cw.append("(Json.Encode.set ")
+
+				parent_type = et.get_parent()
+				parent_type_name = parent_type.get_name()
+
+				if (parent_type_name == "integer"):
+					cw.append("(Json.Encode.int)")
+				elif (parent_type_name == "string"):
+					cw.append("(Json.Encode.string)")
+				elif (parent_type_name == "float"):
+					cw.append("(Json.Encode.float)")
+				elif (parent_type_name == "boolean"):
+					cw.append("(Json.Encode.bool)")
+				else:
+					cw.append("(ENCODE_BASIC ")
+					cw.append(parent_type_name)
+					cw.append(")")
+				cw.append(" ")
 				cw.append(value_access)
 				cw.append(")")
 			elif (isinstance(et, dragoman.DictOfDefinedType)):
@@ -388,6 +434,12 @@ class ObjectTypeConverter:
 				+ ObjectTypeConverter.get_decoder_for(defined_type.get_parent())
 				+ ")"
 			)
+		if (isinstance(defined_type, dragoman.SetOfDefinedType)):
+			return (
+				"(Json.Decode.map (Set.fromArray) (Json.Decode.array "
+				+ ObjectTypeConverter.get_decoder_for(defined_type.get_parent())
+				+ "))"
+			)
 		elif (isinstance(defined_type, dragoman.DictOfDefinedType)):
 			parent_type = defined_type.get_parent()
 			result = (
@@ -409,7 +461,7 @@ class ObjectTypeConverter:
 
 			return (
 				result
-				 + access
+				+ access
 				+ " el acc)) (Dict.empty)) (Json.Decode.array "
 				+ ObjectTypeConverter.get_decoder_for(defined_type.get_parent())
 				+ "))"
@@ -483,15 +535,23 @@ class ObjectTypeConverter:
 		code_writer.title_line("-", "", 0, 80)
 		code_writer.title_line("-", " Standard Library ", 2, 80)
 
+		imports = set()
 		for a in e.get_entries():
 			(depth, leaf_type) = dragoman.ArrayOfDefinedType.compute_depth(
 				a.get_type()
 			)
 
 			if (isinstance(leaf_type, dragoman.DictOfDefinedType)):
-				code_writer.line("import Dict")
-				code_writer.newline()
-				break
+				if ("dict" not in imports):
+					code_writer.line("import Dict")
+					code_writer.newline()
+					imports.add("dict")
+
+			if (isinstance(leaf_type, dragoman.SetOfDefinedType)):
+				if ("set" not in imports):
+					code_writer.line("import Set")
+					code_writer.newline()
+					imports.add("set")
 
 		code_writer.line("import Json.Decode")
 		code_writer.line("import Json.Encode")

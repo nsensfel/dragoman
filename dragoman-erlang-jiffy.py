@@ -91,6 +91,12 @@ class NameConverter:
 				+ NameConverter.type_to_type_reference(t.get_parent())
 				+ ")"
 			)
+		elif isinstance(t, dragoman.SetOfDefinedType):
+			return (
+				"sets:set("
+				+ NameConverter.type_to_type_reference(t.get_parent())
+				+ ")"
+			)
 		elif isinstance(t, dragoman.DictOfDefinedType):
 			return (
 				"#{"
@@ -204,6 +210,7 @@ class ObjectTypeConverter:
 					if (
 						isinstance(e.get_type(), dragoman.UserDefinedType)
 						or isinstance(e.get_type(), dragoman.ArrayOfDefinedType)
+						or isinstance(e.get_type(), dragoman.SetOfDefinedType)
 						or isinstance(e.get_type(), dragoman.DictOfDefinedType)
 					):
 						cw.append(",")
@@ -492,6 +499,7 @@ class ObjectTypeConverter:
 			if (
 				(not isinstance(leaf_type, dragoman.UserDefinedType))
 				and (not isinstance(leaf_type, dragoman.DictOfDefinedType))
+				and (not isinstance(leaf_type, dragoman.SetOfDefinedType))
 			):
 				cw.append(value_access)
 			elif (depth == 0):
@@ -503,6 +511,10 @@ class ObjectTypeConverter:
 					cw.append(":json_export/1, maps:values(")
 					cw.append(value_access)
 					cw.append("))")
+				elif (isinstance(leaf_type, dragoman.SetOfDefinedType)):
+					cw.append("sets:to_list(")
+					cw.append(value_access)
+					cw.append(")")
 				else:
 					cw.append(NameConverter.type_to_module_name(et))
 					cw.append(":json_export(")
@@ -515,6 +527,10 @@ class ObjectTypeConverter:
 						NameConverter.type_to_module_name(leaf_type.get_parent())
 					)
 					cw.append(":json_export/1, maps:values(Y)) end, ")
+					cw.append(value_access)
+					cw.append(")")
+				elif (isinstance(leaf_type, dragoman.SetOfDefinedType)):
+					cw.append("lists:map(fun sets:to_list/1, ")
 					cw.append(value_access)
 					cw.append(")")
 				else:
@@ -536,6 +552,8 @@ class ObjectTypeConverter:
 						NameConverter.type_to_module_name(leaf_type.get_parent())
 					)
 					cw.append(":json_export/1, Y) end)")
+				elif (isinstance(leaf_type, dragoman.SetOfDefinedType)):
+					cw.append("sets:to_list/1)")
 				else:
 					cw.append(NameConverter.type_to_module_name(leaf_type))
 					cw.append(":json_export/1)")
@@ -592,6 +610,7 @@ class ObjectTypeConverter:
 			if (
 				(not isinstance(leaf_type, dragoman.UserDefinedType))
 				and (not isinstance(leaf_type, dragoman.DictOfDefinedType))
+				and (not isinstance(leaf_type, dragoman.SetOfDefinedType))
 			):
 				cw.append(value_access)
 			elif (depth == 0):
@@ -620,6 +639,10 @@ class ObjectTypeConverter:
 					cw.append(":json_import(")
 					cw.append(value_access)
 					cw.append(")")
+				elif (isinstance(leaf_type, dragoman.SetOfDefinedType)):
+					cw.append("sets:from_list(")
+					cw.append(value_access)
+					cw.append(")")
 				else:
 					cw.append(value_access)
 			elif (depth == 1):
@@ -642,6 +665,10 @@ class ObjectTypeConverter:
 					cw.append("lists:map(fun ")
 					cw.append(NameConverter.type_to_module_name(leaf_type))
 					cw.append(":json_import/1, ")
+					cw.append(value_access)
+					cw.append(")")
+				elif (isinstance(leaf_type, dragoman.SetOfDefinedType)):
+					cw.append("lists:map(fun sets:from_list/1, ")
 					cw.append(value_access)
 					cw.append(")")
 				else:
@@ -674,6 +701,8 @@ class ObjectTypeConverter:
 				elif (isinstance(leaf_type, dragoman.UserDefinedType)):
 					cw.append(NameConverter.type_to_module_name(leaf_type))
 					cw.append(":json_import/1)")
+				elif (isinstance(leaf_type, dragoman.SetOfDefinedType)):
+					cw.append("sets:from_list/1)")
 				else:
 					cw.append(value_access)
 
@@ -749,6 +778,7 @@ class ObjectTypeConverter:
 					if (
 						isinstance(i.get_type(), dragoman.UserDefinedType)
 						or isinstance(i.get_type(), dragoman.ArrayOfDefinedType)
+						or isinstance(i.get_type(), dragoman.SetOfDefinedType)
 						or isinstance(i.get_type(), dragoman.DictOfDefinedType)
 					):
 						ObjectTypeConverter.add_ataxia_update_function(code_writer, e, i)

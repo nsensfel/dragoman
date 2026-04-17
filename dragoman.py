@@ -345,6 +345,14 @@ class ArrayOfDefinedType (DefinedType):
 	def get_parent (this):
 		return this.parent
 
+class SetOfDefinedType (DefinedType):
+	def __init__ (this, parent):
+		DefinedType.__init__(this, "(Set of " + parent.get_name() + ")")
+		this.parent = parent
+
+	def get_parent (this):
+		return this.parent
+
 class DictOfDefinedType (DefinedType):
 	def __init__ (
 		this,
@@ -447,6 +455,7 @@ class ObjectTypeEntry:
 			and (
 				isinstance(dtype, UserDefinedType)
 				or isinstance(dtype, ArrayOfDefinedType)
+				or isinstance(dtype, SetOfDefinedType)
 				or isinstance(dtype, DictOfDefinedType)
 			)
 			and not isinstance(dtype, EnumType)
@@ -515,6 +524,7 @@ class ObjectType (UserDefinedType):
 			while (
 				isinstance(dependency, ArrayOfDefinedType)
 				or isinstance(dependency, DictOfDefinedType)
+				or isinstance(dependency, SetOfDefinedType)
 			):
 				if (isinstance(dependency, DictOfDefinedType)):
 					for (access_name, field_type) in dependency.get_accesses():
@@ -729,6 +739,7 @@ class PolymorphType (UserDefinedType):
 			while (
 				isinstance(dependency, ArrayOfDefinedType)
 				or isinstance(dependency, DictOfDefinedType)
+				or isinstance(dependency, SetOfDefinedType)
 			):
 				if (isinstance(dependency, DictOfDefinedType)):
 					for (access_name, field_type) in dependency.get_accesses():
@@ -817,7 +828,6 @@ class NameSplitter:
 
 		return result[0].lower() + result[1:]
 
-
 class DragomanLexer (Lexer):
 	tokens = {
 		#NUMBER,
@@ -827,14 +837,15 @@ class DragomanLexer (Lexer):
 		CASE_KW,
 		CONST_KW,
 		DICT_KW,
-		ENTRY_KW,
-		ENUM_KW,
 		#MAX_KW,
 		#MIN_KW,
+		ENTRY_KW,
+		ENUM_KW,
 		MARKERS_KW,
 		OBJECT_KW,
 		POLYMORPH_KW,
 		REQUIRE_KW,
+		SET_KW,
 		SHARED_KW,
 
 		EOP,
@@ -860,6 +871,7 @@ class DragomanLexer (Lexer):
 	POLYMORPH_KW = r'(?i:\(POLY)(?i:MORPH)?'
 	REQUIRE_KW = r'(?i:\(REQUIRE)'
 	SHARED_KW = r'(?i:\(SHARED)'
+	SET_KW = r'(?i:\(SET)'
 
 	EOP = r'\)'
 
@@ -1290,6 +1302,25 @@ class DragomanParser (Parser):
 		DragomanParser.LAST_TOKEN = t
 
 		return ArrayOfDefinedType(t.get_type)
+
+	@_(r'SET_KW get_type EOP')
+	def get_type (this, t):
+		DragomanParser.LAST_TOKEN = t
+
+		if (
+			isinstance(t.get_type, UserDefinedType)
+		):
+			DragomanParser.print_error(
+				(
+					"Cannot use this type ('"
+					+ t.get_type.get_name()
+					+ "') in a set. Only base types are allowed."
+				),
+				t
+			)
+			raise Exception
+
+		return SetOfDefinedType(t.get_type)
 
 	@_(r'DICT_KW composed_variable_name get_type EOP')
 	def get_type (this, t):
